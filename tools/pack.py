@@ -34,11 +34,11 @@ for folder in ['Magelight', 'SKSE']:
 preset_dir = data / 'SKSE/Plugins/NPCStudio/Equipment'
 expected_presets = {'guard-' + name for name in ['whiterun', 'solitude', 'markarth', 'riften', 'winterhold', 'dawnstar', 'morthal', 'falkreath', 'windhelm']}
 expected_presets.update(['bandit-melee', 'bandit-archer', 'citizen-farm', 'citizen-fine', 'blacksmith', 'miner', 'mage'])
-if {p.stem for p in preset_dir.glob('*.json')} != expected_presets:
+if not expected_presets.issubset({p.stem for p in preset_dir.glob('*.json')}) or len(list(preset_dir.glob('*.json'))) < 40:
     raise ValueError('Built-in equipment preset files changed or missing')
 for path in preset_dir.glob('*.json'):
     preset = json.loads(path.read_text(encoding='utf-8'))
-    if preset.get('schemaVersion') != 1 or not preset.get('name') or not 1 <= len(preset.get('items', [])) <= 64:
+    if not preset.get('category') or preset.get('schemaVersion') != 1 or not preset.get('name') or not 1 <= len(preset.get('items', [])) <= 64:
         raise ValueError('Invalid equipment preset: ' + str(path))
     seen = set()
     for item in preset['items']:
