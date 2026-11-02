@@ -31,6 +31,21 @@ for folder in ['Magelight', 'SKSE']:
     for path in (data / folder).rglob('*'):
         if path.is_file() and path.name not in ['meta.ini', 'Thumbs.db', 'desktop.ini']:
             files[path.relative_to(data).as_posix()] = path
+preset_dir = data / 'SKSE/Plugins/NPCStudio/Equipment'
+expected_presets = {'guard-' + name for name in ['whiterun', 'solitude', 'markarth', 'riften', 'winterhold', 'dawnstar', 'morthal', 'falkreath', 'windhelm']}
+expected_presets.update(['bandit-melee', 'bandit-archer', 'citizen-farm', 'citizen-fine', 'blacksmith', 'miner', 'mage'])
+if {p.stem for p in preset_dir.glob('*.json')} != expected_presets:
+    raise ValueError('Built-in equipment preset files changed or missing')
+for path in preset_dir.glob('*.json'):
+    preset = json.loads(path.read_text(encoding='utf-8'))
+    if preset.get('schemaVersion') != 1 or not preset.get('name') or not 1 <= len(preset.get('items', [])) <= 64:
+        raise ValueError('Invalid equipment preset: ' + str(path))
+    seen = set()
+    for item in preset['items']:
+        address = (item['plugin'], item['form'])
+        if address in seen or item['plugin'] != 'Skyrim.esm' or not 0 < item['form'] <= 0xFFFFFF or not 1 <= item['count'] <= 1000:
+            raise ValueError('Invalid equipment item: ' + str(path))
+        seen.add(address)
 files['NPCStudio.esp'] = data / 'NPCStudio.esp'
 for path in (game / 'fomod').rglob('*'):
     if path.is_file(): files[path.relative_to(game).as_posix()] = path
