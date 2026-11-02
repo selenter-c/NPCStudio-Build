@@ -47,11 +47,12 @@ for path in preset_dir.glob('*.json'):
             raise ValueError('Invalid equipment item: ' + str(path))
         seen.add(address)
 files['NPCStudio.esp'] = data / 'NPCStudio.esp'
+files['NPCStudio_NND_DISTR.ini'] = data / 'NPCStudio_NND_DISTR.ini'
 for path in (game / 'fomod').rglob('*'):
     if path.is_file(): files[path.relative_to(game).as_posix()] = path
 files['SKSE/Plugins/NPCStudio.dll'] = args.dll
 files['SKSE/Plugins/NPCStudio.build.json'] = stamp_path
-required = ['NPCStudio.esp', 'SKSE/Plugins/NPCStudio.dll', 'SKSE/Plugins/NPCStudio/slots.json',
+required = ['NPCStudio.esp', 'NPCStudio_NND_DISTR.ini', 'SKSE/Plugins/NPCStudio.dll', 'SKSE/Plugins/NPCStudio/slots.json',
     'Magelight/NPCStudio/views/studio/index.html', 'Magelight/NPCStudio/views/studio/script.js',
     'Magelight/NPCStudio/views/studio/style.css', 'fomod/info.xml', 'fomod/ModuleConfig.xml']
 for name in required:

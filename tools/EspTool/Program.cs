@@ -32,6 +32,12 @@ if (mode == "generate") {
     sub.Cells.Add(cell);
     block.SubBlocks.Add(sub);
     mod.Cells.Add(block);
+    var anchor = new PlacedObject(Own(0x801), release) {
+        EditorID = "NPCStudioHoldingAnchor", MajorRecordFlagsRaw = (int)PlacedNpc.MajorFlag.Persistent,
+        Placement = new Placement { Position = new P3Float(0, 0, 128), Rotation = new P3Float() }
+    };
+    anchor.Base.SetTo(new FormKey(source.ModKey, 0x3B));
+    cell.Persistent.Add(anchor);
     var slots = new List<object>();
     for (uint id = 0; id < 160; id++) {
         bool isFemale = id < 80;
@@ -88,6 +94,9 @@ using (var check = SkyrimMod.CreateFromBinaryOverlay(espPath, release)) {
     var actors = cells.SelectMany(c => c.Persistent).OfType<IPlacedNpcGetter>().ToArray();
     if (check.Npcs.Count != 160 || actors.Length != 160 || check.Colors.Count != 160 || cells.Length != 1)
         throw new InvalidDataException("РџСѓР» РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ СЂРѕРІРЅРѕ 160 NPC, 160 ACHR, 160 CLFM Рё РѕРґРЅСѓ CELL");
+    var anchor = cells.Single().Persistent.OfType<IPlacedObjectGetter>().Single(a => a.FormKey == Own(0x801));
+    if (anchor.Base.FormKey != new FormKey(ModKey.FromNameAndExtension("Skyrim.esm"), 0x3B) ||
+        (anchor.MajorRecordFlagsRaw & (int)PlacedNpc.MajorFlag.Persistent) == 0) throw new InvalidDataException("Неверный резервный маркер");
     using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
     if (manifest.RootElement.GetProperty("schemaVersion").GetInt32() != 1 || manifest.RootElement.GetProperty("plugin").GetString() != "NPCStudio.esp")
         throw new InvalidDataException("РќРµРёР·РІРµСЃС‚РЅР°СЏ СЃС…РµРјР° РјР°РЅРёС„РµСЃС‚Р°");

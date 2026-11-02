@@ -13,6 +13,7 @@ const fs = require('node:fs')
     await page.addInitScript(() => {
       const state = { version: '0.2.0', ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [] }
       const equipment = { inventory: [], presets: [{ id: 'guard-whiterun', name: 'Стража: Вайтран', items: [{ plugin: 'Skyrim.esm', form: 0x2150D }], available: true }, { id: 'missing', name: 'Недоступный', items: [], available: false, error: 'Нет Missing.esp' }], catalog: [{ plugin: 'Skyrim.esm', form: 0x2150D, name: 'Броня стражника', count: 1, worn: false, kind: 'armor' }], matches: 1 }
+      let generation = 0
       window.testCommands = []
       const handlers = new Map()
       window.magelight = {
@@ -21,10 +22,24 @@ const fs = require('node:fs')
           window.testCommands.push(payload)
           if (payload.action === 'close') return
           if (payload.action === 'create') {
-            const id = payload.female ? state.femaleUsed++ : 80 + state.maleUsed++
-            state.slots.push({ id, female: payload.female, name: payload.name, parked: false, dead: false, reference: 'FE001B00', race: 'Норд' })
+            const start = payload.female ? 0 : 80
+            const id = Array.from({ length: 80 }, (_, index) => start + index).find(id => !state.slots.some(slot => slot.id === id))
+            payload.female ? state.femaleUsed++ : state.maleUsed++
+            equipment.inventory = []
+            state.slots.push({ id, identity: 'generation-' + (++generation), female: payload.female, name: payload.name, parked: false, dead: false, reference: 'FE001B00', race: 'Норд' })
           }
           const slot = state.slots.find(item => item.id === payload.id)
+          if (slot && payload.identity !== undefined && payload.identity !== slot.identity) {
+            setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: false, error: 'Персонаж в этом слоте уже изменился' }), 5)
+            return
+          }
+          if (payload.action === 'delete' && payload.confirmed && slot && payload.identity === slot.identity) {
+            state.slots = state.slots.filter(item => item.id !== slot.id)
+            slot.female ? state.femaleUsed-- : state.maleUsed--
+            equipment.inventory = []
+            delete state.equipment
+            delete state.equipmentOwnerId
+          }
           if (payload.action === 'rename') slot.name = payload.name
           if (payload.action === 'park') slot.parked = true
           if (payload.action === 'summon') slot.parked = false
@@ -90,9 +105,32 @@ const fs = require('node:fs')
       assert.equal(overflow, false, 'Горизонтальное переполнение окна')
     }
     await page.setViewportSize({ width: 1920, height: 1080 })
-    const screenshot = path.join(root, 'NPCStudio-NativePlugin/docs/ui-equipment.png')
+    const screenshot = path.join(root, 'NPCStudio-NativePlugin/docs/ui-delete-names.png')
     await page.screenshot({ path: screenshot })
+    const OldIdentity = await page.evaluate(() => State.slots[0].identity)
+    await page.locator('#deleteNpc').click()
+    assert.equal(await page.locator('#deleteConfirmation').isVisible(), true)
+    assert.equal(await page.evaluate(() => window.testCommands.filter(command => command.action === 'delete').length), 0)
+    await page.locator('#cancelDelete').click()
+    assert.equal(await page.locator('.npc').count(), 1)
+    await page.locator('#deleteNpc').click()
+    await page.locator('#confirmDelete').click()
+    await page.waitForFunction(() => document.querySelector('#femaleCount').textContent === '0 / 80')
+    assert.equal(await page.locator('.npc').count(), 0)
+    await page.locator('#newName').fill('Новая Элара')
+    await page.locator('#createButton').click()
+    await page.waitForFunction(() => document.querySelector('#selectedName').textContent === 'Новая Элара')
+    await page.waitForFunction(() => document.querySelector('#equipmentContent').hidden === false)
+    assert.equal(await page.locator('#equipmentInventory button').count(), 0)
+    assert.equal(await page.locator('#equipmentPreset option[value="user-1"]').count(), 1)
+    assert.notEqual(await page.evaluate(() => State.slots[0].identity), OldIdentity)
+    const StaleRejected = await page.evaluate(async OldIdentity => {
+      try { await Send('rename', { id: 0, identity: OldIdentity, name: 'Чужое имя' }); return false }
+      catch { return true }
+    }, OldIdentity)
+    assert.equal(StaleRejected, true)
+    assert.equal(await page.locator('#selectedName').textContent(), 'Новая Элара')
     assert.deepEqual(errors, [])
-    console.log('UI smoke: create, Cyrillic, rename, text escaping, park, summon, search, equipment, missing dependency, preset saving, 720p/1080p passed')
+    console.log('UI smoke: create, Cyrillic, rename, text escaping, park, summon, search, equipment, missing dependency, preset saving, deletion/cancel/reuse, stale identity, 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
