@@ -15,11 +15,12 @@ const fs = require('node:fs')
     await page.addInitScript(({ presets }) => {
       const female = id => id < 80 || (id >= 160 && id < 280)
       const number = id => id < 80 ? id + 1 : id < 160 ? id - 79 : id < 280 ? id - 79 : id - 199
-      const state = { version: '0.4.0', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 66, modifiers: 1 }, library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
+      const state = { version: '0.5.0', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 9, modifiers: 1, language: 'ru', theme: 'amethyst' }, races: [{ id: 'NordRace', name: 'Норд' }, { id: 'WoodElfRace', name: 'Босмер' }, { id: 'KhajiitRace', name: 'Каджит' }], library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
       const used = new Set()
       const inventory = new Map()
       let generation = 0
       window.testCommands = []
+      window.testEvents = {}
       function refresh() {
         state.availableSlots = Array.from({ length: 400 }, (_, id) => ({ id, number: number(id), female: female(id), history: used.has(id) ? 'used' : 'fresh' })).filter(slot => !state.slots.some(actor => actor.id === slot.id))
         state.femaleUsed = state.slots.filter(slot => slot.female).length
@@ -29,7 +30,7 @@ const fs = require('node:fs')
       function reply(payload) { refresh(); setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: structuredClone(state) }), 5) }
       refresh()
       window.magelight = {
-        on: () => {},
+        on: (name, callback) => { window.testEvents[name] = callback },
         send: (name, payload) => {
           window.testCommands.push(payload)
           if (payload.action === 'close') return
@@ -38,16 +39,25 @@ const fs = require('node:fs')
           delete state.equipment
           delete state.equipmentOwnerId
           delete state.generatedName
+          delete state.preview
+          delete state.portrait
           if (payload.action === 'randomName') state.generatedName = { name: 'Эйра', source: 'NNDNord.json (Tamrielic Names / NND)' }
           if (payload.action === 'create') {
             const available = state.availableSlots.filter(slot => slot.female === payload.female).sort((a, b) => (a.history === 'used') - (b.history === 'used') || a.id - b.id)
             const slot = payload.slot === null ? available[0] : available.find(slot => slot.id === payload.slot)
             if (!slot) throw new Error('Неверный выбор слота')
-            state.slots.push({ ...slot, name: payload.name, identity: 'generation-' + (++generation), parked: false, dead: false, reference: 'FE001' + slot.id.toString(16), race: slot.female ? 'Норд' : 'Лесной эльф', warning: '', restoring: false })
+            state.slots.push({ ...slot, name: payload.name, identity: 'generation-' + (++generation), parked: false, dead: false, reference: 'FE001' + slot.id.toString(16), raceId: payload.race, race: 'Норд', warning: '', restoring: false })
             used.add(slot.id)
             inventory.set(slot.id, [])
             if (payload.preset) equip(slot.id, state.library.presets.find(preset => preset.id === payload.preset))
           }
+          if (payload.action === 'preview' || payload.action === 'portrait') {
+            const canvas = document.createElement('canvas'); canvas.width = 300; canvas.height = 380
+            const context = canvas.getContext('2d'); context.fillStyle = '#17131d'; context.fillRect(0,0,300,380)
+            context.fillStyle = '#c4a0e7'; context.font = '18px sans-serif'; context.fillText('MOCK RENDERER',60,180)
+            state[payload.action] = { identity: actor.identity, image: canvas.toDataURL(), portrait: canvas.toDataURL(), meshes: 12, skipped: 0 }
+          }
+          if (payload.action === 'setRace') actor.raceId = payload.race
           if (payload.action === 'rename') actor.name = payload.name
           if (payload.action === 'park') actor.parked = true
           if (payload.action === 'summon') { actor.parked = false; actor.warning = 'Снаряжение восстановлено; количество предметов проверено' }
@@ -76,15 +86,25 @@ const fs = require('node:fs')
     }
     const Tab = name => page.locator('[data-tab="' + name + '"]').click()
     await page.goto('file:///' + path.join(root, 'NPCStudio-GamePlugin/Data/Magelight/NPCStudio/views/studio/index.html').replaceAll('\\', '/'))
-    await page.waitForFunction(() => document.querySelector('#connection').textContent === 'Игра подключена')
-    assert.equal(await page.locator('#hotkeyHint').textContent(), 'Shift + F8')
+    await page.waitForFunction(() => document.querySelector('#hotkeyHint').textContent === 'Shift + 8')
+    assert.equal(await page.locator('#hotkeyHint').textContent(), 'Shift + 8')
     await page.locator('#randomName').click()
     await page.waitForFunction(() => document.querySelector('#newName').value === 'Эйра')
     await Combo('creationCategory', 'Стража владений')
     await Combo('creationPreset', 'Стража: Вайтран')
+    await Combo('creationRace', 'Каджит')
     await page.locator('#createButton').click()
     await page.waitForFunction(() => document.querySelector('#selectedName').textContent === 'Эйра')
     assert.equal(await page.locator('#femaleCount').textContent(), '1 / 200')
+    assert.equal(await page.evaluate(() => window.testCommands.find(command => command.action === 'create').race), 'KhajiitRace')
+    await page.waitForFunction(() => !document.querySelector('#previewImage').hidden)
+    assert.equal(await page.locator('.avatar img').count(), 1)
+    await page.locator('#previewYaw').fill('90')
+    await page.locator('#previewYaw').dispatchEvent('input')
+    await page.waitForFunction(() => window.testCommands.some(command => command.action === 'preview' && command.yaw === 90))
+    await Combo('editRace', 'Босмер')
+    await page.locator('#setRace').click()
+    await page.waitForFunction(() => State.slots[0].raceId === 'WoodElfRace')
     assert.equal(await page.evaluate(() => window.testCommands.find(command => command.action === 'create').preset), 'guard-whiterun')
     await page.locator('#editName').fill('<img src=x onerror=alert(1)>')
     await page.locator('#rename').click()
@@ -118,7 +138,23 @@ const fs = require('node:fs')
     await page.waitForFunction(() => document.querySelector('#hotkeyHint').textContent === 'Shift + Ctrl + F7')
     await page.locator('#resetSettings').click()
     await page.locator('#saveSettings').click()
-    await page.waitForFunction(() => document.querySelector('#hotkeyHint').textContent === 'Shift + F8')
+    await page.waitForFunction(() => document.querySelector('#hotkeyHint').textContent === 'Shift + 8')
+    const originalColor = await page.locator('.studio').evaluate(element => getComputedStyle(element).backgroundColor)
+    await Combo('language', 'English')
+    await Combo('theme', 'Изумруд')
+    await page.locator('#saveSettings').click()
+    await page.waitForFunction(() => document.documentElement.lang === 'en')
+    assert.equal(await page.locator('[data-tab="roster"]').innerText(), 'My characters\n1')
+    assert.notEqual(await page.locator('.studio').evaluate(element => getComputedStyle(element).backgroundColor), originalColor)
+    await Tab('roster')
+    assert.equal(await page.locator('#actorPicker option[value=""]').textContent(), 'Not selected')
+    assert.equal(await page.locator('#selectedName').textContent(), 'Элара')
+    assert.equal(await page.locator('#setRace').textContent(), 'Apply race')
+    await Tab('settings')
+    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-050-settings-en.png') })
+    await Combo('language', 'Русский')
+    await page.locator('#saveSettings').click()
+    await page.waitForFunction(() => document.documentElement.lang === 'ru')
     await Tab('roster')
     const oldIdentity = await page.evaluate(() => State.slots[0].identity)
     await page.locator('#deleteNpc').click()
@@ -162,10 +198,16 @@ const fs = require('node:fs')
     }
     await page.setViewportSize({ width: 1920, height: 1080 })
     await Tab('create')
-    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-040-create.png') })
+    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-050-create.png') })
     await Tab('roster')
-    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-040-roster.png') })
+    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-050-roster.png') })
+    await page.evaluate(() => window.testEvents.__uimode('0'))
+    const closedCount = await page.evaluate(() => window.testCommands.length)
+    await page.waitForTimeout(650)
+    assert.equal(await page.evaluate(() => window.testCommands.length), closedCount, 'Закрытый UI продолжает отправлять команды')
+    await page.evaluate(() => window.testEvents.__uimode('1'))
+    await page.waitForFunction(() => !document.querySelector('#previewImage').hidden)
     assert.deepEqual(errors, [])
-    console.log('UI 0.4: custom combos/search, spawn preset, slots/history/reuse/399, categories, random names, settings, gear UI, escaping, stale identity, 5 pages at 720p/1080p passed')
+    console.log('UI 0.5: locale/theme/race/portrait/preview camera, custom combos/search, spawn preset, slots/history/reuse/399, categories, random names, settings, gear UI, escaping, stale identity, 5 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })

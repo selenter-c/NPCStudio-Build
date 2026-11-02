@@ -54,7 +54,7 @@ files['SKSE/Plugins/NPCStudio.dll'] = args.dll
 files['SKSE/Plugins/NPCStudio.build.json'] = stamp_path
 required = ['NPCStudio.esp', 'NPCStudio_NND_DISTR.ini', 'SKSE/Plugins/NPCStudio.dll', 'SKSE/Plugins/NPCStudio/slots.json',
     'Magelight/NPCStudio/views/studio/index.html', 'Magelight/NPCStudio/views/studio/script.js',
-    'Magelight/NPCStudio/views/studio/style.css', 'fomod/info.xml', 'fomod/ModuleConfig.xml']
+    'Magelight/NPCStudio/views/studio/style.css', 'Magelight/NPCStudio/views/studio/i18n.js', 'fomod/info.xml', 'fomod/ModuleConfig.xml']
 for name in required:
     if name not in files or not files[name].is_file(): raise ValueError('Missing payload: ' + name)
 for item in Xml.parse(game / 'fomod/ModuleConfig.xml').find('requiredInstallFiles'):
