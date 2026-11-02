@@ -1,3 +1,7 @@
 output/
 dist/
 *.log
+**/bin/
+**/obj/
+
+**/node_modules/

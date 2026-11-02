@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Compile NPC Studio NativePlugin (C++ SKSE plugin).
 
@@ -26,10 +26,12 @@ param(
     [ValidateSet("Release", "Debug")]
     [string]$Config = "Release",
     [string]$VcpkgRoot = "",
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$Fresh
 )
 
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot/BuildHelpers.ps1"
 
 $repoRoot  = Split-Path -Parent $PSScriptRoot
 $nativeDir = Join-Path $repoRoot 'NPCStudio-NativePlugin'
@@ -88,7 +90,7 @@ $clPaths = @(
     "${env:ProgramFiles}\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
 )
 foreach ($p in $clPaths) {
-    $f = Get-Item $p -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    $f = Get-Item $p -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "14\.44\." } | Sort-Object FullName -Descending | Select-Object -First 1
     if ($f) { $clExe = $f.FullName; break }
 }
 
@@ -142,13 +144,16 @@ if (-not [string]::IsNullOrWhiteSpace($ninjaPath)) {
     $ninjaLine = "set PATH=$ninjaDir;%PATH%"
 }
 
+$freshArg = if ($Fresh) { "--fresh" } else { "" }
 $batContent = @"
 @echo off
-call "$vcvarsall" x64 >nul 2>&1
+call "$vcvarsall" x64 -vcvars_ver=14.44 >nul 2>&1
 $ninjaLine
-cmake -S "$nativeDir" -B "$buildDir" -G Ninja -DCMAKE_BUILD_TYPE=$Config -DCMAKE_C_COMPILER="$clExe" -DCMAKE_CXX_COMPILER="$clExe" $toolchainLine
+cmake $freshArg -S "$nativeDir" -B "$buildDir" -G Ninja -DCMAKE_BUILD_TYPE=$Config -DCMAKE_C_COMPILER="$clExe" -DCMAKE_CXX_COMPILER="$clExe" $toolchainLine
 if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
-cmake --build "$buildDir"
+cmake --build "$buildDir" --parallel 6
+if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+ctest --test-dir "$buildDir" -C $Config --output-on-failure
 exit /b %ERRORLEVEL%
 "@
 
@@ -173,6 +178,8 @@ if (-not (Test-Path $dllPath)) { $dllPath = Join-Path $buildDir "$Config\NPCStud
 if (-not (Test-Path $dllPath)) { $dllPath = Join-Path $buildDir "bin\$Config\NPCStudio.dll" }
 
 if (Test-Path $dllPath) {
+    $stamp = @{ version = '0.2.0'; sourceHash = (Get-NativeSourceHash $nativeDir); dllHash = (Get-FileDigest $dllPath); validation = 'compiled; runtime unverified' }
+    $stamp | ConvertTo-Json | Set-Content -LiteralPath (Join-Path (Split-Path -Parent $dllPath) 'NPCStudio.build.json') -Encoding UTF8
     $sizeKB = [math]::Round((Get-Item $dllPath).Length / 1KB)
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Green
