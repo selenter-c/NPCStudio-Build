@@ -13,20 +13,20 @@ var manifestPath = Path.Combine(dataPath, "SKSE", "Plugins", "NPCStudio", "slots
 var key = ModKey.FromNameAndExtension("NPCStudio.esp");
 const SkyrimRelease release = SkyrimRelease.SkyrimSE;
 FormKey Own(uint id) => new(key, id);
-bool Female(uint id) => id < 80 || (id >= 160 && id < 280);
-uint Number(uint id) => id < 80 ? id + 1 : id < 160 ? id - 79 : id < 280 ? id - 79 : id - 199;
-uint ColorId(uint id) => id < 160 ? 0x900 + id : 0xC00 + id - 160;
-uint BaseId(uint id) => id < 160 ? 0xA00 + id : 0xD00 + id - 160;
-uint ActorId(uint id) => id < 160 ? 0xB00 + id : 0xE00 + id - 160;
+bool Female(uint id) => id < 200;
+uint Number(uint id) => id % 200 + 1;
+uint ColorId(uint id) => 0x900 + id;
+uint BaseId(uint id) => 0xB00 + id;
+uint ActorId(uint id) => 0xD00 + id;
 if (mode == "generate") {
     if (args.Length != 3 || !File.Exists(args[2])) throw new ArgumentException("Нужен установленный Skyrim.esm для исходных vanilla-форм");
     using var source = SkyrimMod.CreateFromBinaryOverlay(args[2], release);
-    // РљРѕРїРёСЂСѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РІРЅРµС€РЅРѕСЃС‚СЊ vanilla. РљРІРµСЃС‚С‹, РёРЅРІРµРЅС‚Р°СЂСЊ, С„СЂР°РєС†РёРё Рё СЃРєСЂРёРїС‚С‹ РёСЃС…РѕРґРЅС‹С… NPC РЅРµ РїРµСЂРµРЅРѕСЃСЏС‚СЃСЏ.
+    // Копируется только внешность: квесты, фракции, инвентарь и скрипты исходных NPC не переносятся.
     var female = source.Npcs.First(x => x.FormKey.ID == 0xA2C8E);
     var male = source.Npcs.First(x => x.FormKey.ID == 0x13480);
     var mod = new SkyrimMod(key, release);
     mod.ModHeader.Author = "NPCStudio";
-    mod.ModHeader.Description = "NPCStudio 0.4: fixed pool, 200 female and 200 male persistent actors";
+    mod.ModHeader.Description = "NPCStudio 0.5.1: fixed pool, 200 female and 200 male persistent actors";
     mod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
     var cell = new Cell(Own(0x800), release) {
         EditorID = "NPCStudioHoldingCell", Name = "NPCStudio: резерв",
@@ -91,7 +91,7 @@ if (mode == "generate") {
     mod.WriteToBinary(temp);
     File.Move(temp, espPath, true);
     Directory.Delete(tempDir);
-    File.WriteAllText(manifestPath, JsonSerializer.Serialize(new { schemaVersion = 2, plugin = "NPCStudio.esp", slots }, new JsonSerializerOptions { WriteIndented = true }));
+    File.WriteAllText(manifestPath, JsonSerializer.Serialize(new { schemaVersion = 3, plugin = "NPCStudio.esp", slots }, new JsonSerializerOptions { WriteIndented = true }));
 }
 if (mode != "validate" && mode != "generate") throw new ArgumentException("Неизвестный режим");
 using (var check = SkyrimMod.CreateFromBinaryOverlay(espPath, release)) {
@@ -103,7 +103,7 @@ using (var check = SkyrimMod.CreateFromBinaryOverlay(espPath, release)) {
     if (anchor.Base.FormKey != new FormKey(ModKey.FromNameAndExtension("Skyrim.esm"), 0x3B) ||
         (anchor.MajorRecordFlagsRaw & (int)PlacedNpc.MajorFlag.Persistent) == 0) throw new InvalidDataException("Неверный резервный маркер");
     using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
-    if (manifest.RootElement.GetProperty("schemaVersion").GetInt32() != 2 || manifest.RootElement.GetProperty("plugin").GetString() != "NPCStudio.esp")
+    if (manifest.RootElement.GetProperty("schemaVersion").GetInt32() != 3 || manifest.RootElement.GetProperty("plugin").GetString() != "NPCStudio.esp")
         throw new InvalidDataException("Неизвестная схема манифеста");
     var slots = manifest.RootElement.GetProperty("slots").EnumerateArray().ToArray();
     if (slots.Length != 400 || !check.ModHeader.Flags.HasFlag(SkyrimModHeader.HeaderFlag.Small)) throw new InvalidDataException("Повреждён пул");

@@ -1,11 +1,9 @@
-# NPCStudio — сборка 0.5
+# NPCStudio — сборка0.5.1
 
-build.bat → dist/NPCStudio-0.5.0-fomod.zip. Инкрементальная сборка; build-clean.bat обычно не нужен. MSVCv14314.44, CMake/Ninja/vcpkg, .NET10, Python, установленный Skyrim.esm.
+build.bat → dist/NPCStudio-0.5.1-fomod.zip. Обычно инкрементально, без build-clean. Нужны MSVC14.44, CMake/Ninja/vcpkg, .NET10, Python и Skyrim.esm.
 
-EspTool Mutagen0.54.4:400NPC/400ACHR/400CLFM, CELL/XMarker, манифест schema2. Пул/адреса с0.4 неизменны, ESL сохранён.
+Только новая игра. Миграции и старое расположение80+80 удалены:400 последовательных слотов, первые200 женские. Адреса CLFM900+id/NPCB00+id/ACHRD00+id, максимумE8F, ESL. EspTool/Mutagen0.54.4 проверяет весь пул и schema3 манифест.
 
-Native CTest: co-save/история/границы400, язык системы/сохранённый выбор/миграция Shift+F8/валидация настроек; Direct3D WARP: HLSL, кадры/портрет PNG, камера/свет, восстановление viewport. Эти проверки обязательны. Pack проверяет source/DLL hashes и версию, UI/i18n/40наборов/ESP/FOMOD/ZIP.
+Обязательные CTest: актуальный co-save/история/границы/настройки и отказ от иных форматов; Direct3D WARP проверяет рендер. Pack проверяет source/DLL hashes, версию и51файл ZIP. UI: npm ci --prefix tools/ui-tests; node tools/ui-tests/smoke.cjs. Mock Chrome проверяет единые слоты, OrcRace, локали/палитру и прежние операции, пять страниц720p/1080p. Это не тест реального игрового Actor::SwitchRace.
 
-UI: npm ci --prefix tools/ui-tests; node tools/ui-tests/smoke.cjs. Отдельный headless Chrome с mock bridge: локали/палитра/расы/портреты/камера и все прежние операции, пять страниц720p/1080p. Mock не читает реальный NPC; скриншоты Native/docs/ui-050-*.png явно содержат MOCK RENDERER.
-
-Установку/запуск выполняет пользователь. 0.4 подтверждена в игре, 0.5 требует ручной проверки рендера и рас. Сохранять отдельный старый сейв и пользовательские JSON при обновлении.
+Установку и игру выполняет пользователь. Инструкция и ограничения — NativePlugin/README.md. Предыдущие Git-теги сохранены для отката исходников, но исполняемый код не конвертирует старые сейвы.
