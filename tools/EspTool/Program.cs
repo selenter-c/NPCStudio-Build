@@ -26,7 +26,7 @@ if (mode == "generate") {
     var male = source.Npcs.First(x => x.FormKey.ID == 0x13480);
     var mod = new SkyrimMod(key, release);
     mod.ModHeader.Author = "NPCStudio";
-    mod.ModHeader.Description = "NPCStudio 0.5.1: fixed pool, 200 female and 200 male persistent actors";
+    mod.ModHeader.Description = "NPCStudio 0.6.0: fixed pool, 200 female and 200 male persistent actors";
     mod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
     var cell = new Cell(Own(0x800), release) {
         EditorID = "NPCStudioHoldingCell", Name = "NPCStudio: резерв",

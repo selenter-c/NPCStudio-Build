@@ -1,9 +1,9 @@
-# NPCStudio — сборка0.5.1
+# NPCStudio — сборка0.6.0
 
-build.bat → dist/NPCStudio-0.5.1-fomod.zip. Обычно инкрементально, без build-clean. Нужны MSVC14.44, CMake/Ninja/vcpkg, .NET10, Python и Skyrim.esm.
+build.bat → dist/NPCStudio-0.6.0-fomod.zip. Инкрементально, без build-clean. Нужны MSVC14.44, CMake/Ninja/vcpkg, .NET10, Python и Skyrim.esm. Для автоматического завершения: NPCSTUDIO_NO_PAUSE=1.
 
-Только новая игра. Миграции и старое расположение80+80 удалены:400 последовательных слотов, первые200 женские. Адреса CLFM900+id/NPCB00+id/ACHRD00+id, максимумE8F, ESL. EspTool/Mutagen0.54.4 проверяет весь пул и schema3 манифест.
+Новый адаптер NPC/item renderer требует проверенный Phantasm0.3.0 ccf916f72d59. `python tools/phantasm.py --pack` проверяет SHA256/PE/API относительно NativePlugin/src/preview/PhantasmAPI.h и создаёт отдельный dist/NPCStudio-Phantasm-0.3.0-local.zip из ../SeverAction/97 Phantasm/00 Core. Это личный локальный архив зависимости, чужие бинарники в Git не добавляются. Пользователь устанавливает оба ZIP в MO2 при закрытой игре. Самостоятельно MO2/Skyrim не запускаются.
 
-Обязательные CTest: актуальный co-save/история/границы/настройки и отказ от иных форматов; Direct3D WARP проверяет рендер. Pack проверяет source/DLL hashes, версию и51файл ZIP. UI: npm ci --prefix tools/ui-tests; node tools/ui-tests/smoke.cjs. Mock Chrome проверяет единые слоты, OrcRace, локали/палитру и прежние операции, пять страниц720p/1080p. Это не тест реального игрового Actor::SwitchRace.
+Pipeline: Mutagen генерация/проверка400slots, native compile + CTest2, stamp DLL/source SHA, FOMOD ZIP validation. `node tools/ui-tests/smoke.cjs` запускает Chrome headless с mock Phantasm: async/partial, аватары,3Dпредметы,100 camera inputs без перестройки roster и остальные страницы/операции. Эти тесты не доказывают FPS/отсутствие вылетов в Skyrim; сборка помечается build-tested, не user-tested.
 
-Установку и игру выполняет пользователь. Инструкция и ограничения — NativePlugin/README.md. Предыдущие Git-теги сохранены для отката исходников, но исполняемый код не конвертирует старые сейвы.
+Стабильная пользовательская точка — checkpoint-0.4.0-user-tested. Предыдущий0.5.1 вызвал GPU hang при вращении; новый0.6.0 ждёт ручного теста. Миграций старых co-save нет, тестировать с новой игры. Подробности и ABI — NativePlugin/docs/RENDERING_060.md.

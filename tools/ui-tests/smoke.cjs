@@ -15,7 +15,7 @@ const fs = require('node:fs')
     await page.addInitScript(({ presets }) => {
       const female = id => id < 200
       const number = id => id % 200 + 1
-      const state = { version: '0.5.1', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 9, modifiers: 1, language: 'ru', theme: 'amethyst' }, races: [{ id: 'NordRace', name: 'Норд' }, { id: 'WoodElfRace', name: 'Босмер' }, { id: 'KhajiitRace', name: 'Каджит' }, { id: 'OrcRace', name: 'Орк' }], library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
+      const state = { version: '0.6.0', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 9, modifiers: 1, language: 'ru', theme: 'amethyst' }, races: [{ id: 'NordRace', name: 'Норд' }, { id: 'WoodElfRace', name: 'Босмер' }, { id: 'KhajiitRace', name: 'Каджит' }, { id: 'OrcRace', name: 'Орк' }], library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
       const used = new Set()
       const inventory = new Map()
       let generation = 0
@@ -51,11 +51,20 @@ const fs = require('node:fs')
             inventory.set(slot.id, [])
             if (payload.preset) equip(slot.id, state.library.presets.find(preset => preset.id === payload.preset))
           }
-          if (payload.action === 'preview' || payload.action === 'portrait') {
+          if (['preview', 'portrait', 'itemPreview', 'previewStop'].includes(payload.action)) {
+            if (payload.action === 'previewStop') {
+              setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true } }), 5)
+              return
+            }
             const canvas = document.createElement('canvas'); canvas.width = 300; canvas.height = 380
             const context = canvas.getContext('2d'); context.fillStyle = '#17131d'; context.fillRect(0,0,300,380)
-            context.fillStyle = '#c4a0e7'; context.font = '18px sans-serif'; context.fillText('MOCK RENDERER',60,180)
-            state[payload.action] = { identity: actor.identity, image: canvas.toDataURL(), portrait: canvas.toDataURL(), meshes: 12, skipped: 0 }
+            context.fillStyle = '#c4a0e7'; context.font = '18px sans-serif'; context.fillText('MOCK PHANTASM',60,180)
+            const kind = payload.action === 'itemPreview' ? 'item' : payload.action === 'portrait' ? 'portrait' : 'actor'
+            const identity = kind === 'item' ? 'item-' + payload.item.form : actor.identity
+            const update = { identity, kind, pending: true, backend: 'Phantasm 0.3.0' }
+            setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, [payload.action]: update } }), 5)
+            setTimeout(() => window.studioPreview({ ...update, pending: false, image: canvas.toDataURL(), ...(kind === 'portrait' ? { portrait: canvas.toDataURL() } : {}) }), 20)
+            return
           }
           if (payload.action === 'setRace') actor.raceId = payload.race
           if (payload.action === 'rename') actor.name = payload.name
@@ -102,10 +111,19 @@ const fs = require('node:fs')
     assert.equal(await page.locator('#femaleCount').textContent(), '1 / 200')
     assert.equal(await page.evaluate(() => window.testCommands.find(command => command.action === 'create').race), 'OrcRace')
     await page.waitForFunction(() => !document.querySelector('#previewImage').hidden)
-    assert.equal(await page.locator('.avatar img').count(), 1)
+    await page.waitForFunction(() => document.querySelectorAll('.avatar img').length === 1)
     await page.locator('#previewYaw').fill('90')
     await page.locator('#previewYaw').dispatchEvent('input')
     await page.waitForFunction(() => window.testCommands.some(command => command.action === 'preview' && command.yaw === 90))
+    const RosterNode = await page.locator('#list .npc').first().elementHandle()
+    const CameraBefore = await page.evaluate(() => window.testCommands.filter(command => command.action === 'preview').length)
+    await page.evaluate(() => {
+      const Slider = document.querySelector('#previewYaw')
+      for (let Index = 0; Index < 100; Index++) { Slider.value = String(Index); Slider.dispatchEvent(new Event('input')) }
+    })
+    await page.waitForFunction(() => window.testCommands.some(command => command.action === 'preview' && command.yaw === 99))
+    assert.ok(await RosterNode.evaluate(Node => Node === document.querySelector('#list .npc')), 'camera must not rebuild the roster')
+    assert.ok(await page.evaluate(Before => window.testCommands.filter(command => command.action === 'preview').length - Before <= 3, CameraBefore), 'rapid input must coalesce')
     await Combo('editRace', 'Босмер')
     await page.locator('#setRace').click()
     await page.waitForFunction(() => State.slots[0].raceId === 'WoodElfRace')
@@ -118,8 +136,16 @@ const fs = require('node:fs')
     await page.locator('#rename').click()
     await page.waitForFunction(() => document.querySelector('#selectedName').textContent === 'Элара')
     await Tab('equipment')
-    await page.waitForFunction(() => document.querySelectorAll('#equipmentInventory button').length === 6)
-    assert.equal(await page.locator('#equipmentInventory button').first().textContent(), 'Снять')
+    await page.waitForFunction(() => document.querySelectorAll('#equipmentInventory .equipment-item').length === 6)
+    assert.equal(await page.locator('#equipmentInventory .equipment-item').first().locator('button').last().textContent(), 'Снять')
+    await page.locator('#equipmentCatalog button').filter({ hasText: /^3D$/ }).first().click()
+    await page.waitForFunction(() => !document.querySelector('#itemPreviewImage').hidden)
+    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-060-item-mock.png') })
+    await page.locator('#itemPreviewYaw').fill('45')
+    await page.locator('#itemPreviewYaw').dispatchEvent('input')
+    await page.waitForFunction(() => window.testCommands.some(command => command.action === 'itemPreview' && command.yaw === 45))
+    await page.locator('#itemPreviewClose').click()
+    assert.equal(await page.locator('#itemPreviewPanel').isVisible(), false)
     await Tab('roster')
     await page.locator('#park').click()
     await page.waitForFunction(() => document.querySelector('#status').textContent === 'Убран из мира')
@@ -155,7 +181,7 @@ const fs = require('node:fs')
     assert.equal(await page.locator('#selectedName').textContent(), 'Элара')
     assert.equal(await page.locator('#setRace').textContent(), 'Apply race')
     await Tab('settings')
-    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-051-settings-en.png') })
+    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-060-settings-en.png') })
     await Combo('language', 'Русский')
     await page.locator('#saveSettings').click()
     await page.waitForFunction(() => document.documentElement.lang === 'ru')
@@ -202,16 +228,20 @@ const fs = require('node:fs')
     }
     await page.setViewportSize({ width: 1920, height: 1080 })
     await Tab('create')
-    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-051-create.png') })
+    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-060-create.png') })
     await Tab('roster')
-    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-051-roster.png') })
+    await page.waitForFunction(() => !document.querySelector('#previewImage').hidden)
+    await page.screenshot({ path: path.join(root, 'NPCStudio-NativePlugin/docs/ui-060-roster.png') })
     await page.evaluate(() => window.testEvents.__uimode('0'))
     const closedCount = await page.evaluate(() => window.testCommands.length)
+    const ClosedImage = await page.locator('#previewImage').getAttribute('src')
+    await page.evaluate(() => window.studioPreview({ kind: 'actor', identity: State.slots.find(slot => slot.id === SelectedId).identity, image: 'late-closed-frame' }))
+    assert.equal(await page.locator('#previewImage').getAttribute('src'), ClosedImage, 'closed UI accepted a late frame')
     await page.waitForTimeout(650)
     assert.equal(await page.evaluate(() => window.testCommands.length), closedCount, 'Закрытый UI продолжает отправлять команды')
     await page.evaluate(() => window.testEvents.__uimode('1'))
     await page.waitForFunction(() => !document.querySelector('#previewImage').hidden)
     assert.deepEqual(errors, [])
-    console.log('UI 0.5.1: locale/theme/race/portrait/preview camera, custom combos/search, spawn preset, slots/history/reuse/399, categories, random names, settings, gear UI, escaping, stale identity, 5 pages at 720p/1080p passed')
+    console.log('UI 0.6.0: locale/theme/race/portrait/preview camera, custom combos/search, spawn preset, slots/history/reuse/399, categories, random names, settings, gear UI, escaping, stale identity, 5 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
