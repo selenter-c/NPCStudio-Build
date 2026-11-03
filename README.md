@@ -1,9 +1,11 @@
-# NPCStudio — сборка0.6.0
+## Обновление 0.6.1
 
-build.bat → dist/NPCStudio-0.6.0-fomod.zip. Инкрементально, без build-clean. Нужны MSVC14.44, CMake/Ninja/vcpkg, .NET10, Python и Skyrim.esm. Для автоматического завершения: NPCSTUDIO_NO_PAUSE=1.
+Установка одним архивом `NPCStudio-Build/dist/NPCStudio-0.6.1-fomod.zip`: проверенный Phantasm, его SWF и лицензии включены в локальный комплект. Отдельный мод NPCStudio-Phantasm отключить, чтобы он не перекрывал файлы. Полный SeverActions не требуется. Phantasm остаётся отдельной DLL внутри одного установленного мода; это внешний компонент, не собственная разработка NPCStudio. Чужие бинарники не публикуются в Git.
 
-Новый адаптер NPC/item renderer требует проверенный Phantasm0.3.0 ccf916f72d59. `python tools/phantasm.py --pack` проверяет SHA256/PE/API относительно NativePlugin/src/preview/PhantasmAPI.h и создаёт отдельный dist/NPCStudio-Phantasm-0.3.0-local.zip из ../SeverAction/97 Phantasm/00 Core. Это личный локальный архив зависимости, чужие бинарники в Git не добавляются. Пользователь устанавливает оба ZIP в MO2 при закрытой игре. Самостоятельно MO2/Skyrim не запускаются.
+Исправлено: строчный ID клиента Phantasm, поиск предметов через LookupForm + As (также аудит инвентаря), синхронизация цвета тела со слоем кожи головы после смены расы. Сборка и автоматические тесты не заменяют проверку в Skyrim; начать новую игру и проверить NPC/предметы/орка/возврат одежды.
 
-Pipeline: Mutagen генерация/проверка400slots, native compile + CTest2, stamp DLL/source SHA, FOMOD ZIP validation. `node tools/ui-tests/smoke.cjs` запускает Chrome headless с mock Phantasm: async/partial, аватары,3Dпредметы,100 camera inputs без перестройки roster и остальные страницы/операции. Эти тесты не доказывают FPS/отсутствие вылетов в Skyrim; сборка помечается build-tested, не user-tested.
+Сборка: `NPCStudio-Build/build.bat`, инкрементально. Требуются Skyrim 1.6.1170, SKSE, Address Library и Magelight UI. Открытие Shift+8 (верхний ряд). Языки ru/en, четыре палитры, 200 женских и 200 мужских слотов; только текущая схема сохранения, без миграций. Пользовательские Equipment/user-*.json, categories.json и settings.json сохранить перед заменой установленной версии.
 
-Стабильная пользовательская точка — checkpoint-0.4.0-user-tested. Предыдущий0.5.1 вызвал GPU hang при вращении; новый0.6.0 ждёт ручного теста. Миграций старых co-save нет, тестировать с новой игры. Подробности и ABI — NativePlugin/docs/RENDERING_060.md.
+Проверки: CTest state-codec/preview-contract, Mutagen 400 NPC + 400 persistent ACHR, Chrome headless с имитацией игрового API, ZIP и хеш Phantasm. Последняя стабильная пользовательская точка — checkpoint-0.4.0-user-tested; 0.6.1 помечается только build-tested до игрового теста. Редактор головы/RaceMenu и SkyrimNet ещё не подключены.
+
+Разбор рендера: NPCStudio-NativePlugin/docs/RENDERING_060.md, исправления: NPCStudio-NativePlugin/docs/RENDERING_061.md. Автоматизация не запускает MO2/Skyrim. Локальный установщик собирается из предоставленного пользователем SeverAction/97 Phantasm/00 Core; бинарник проверяется по точному SHA256, не добавляется в Git.

@@ -46,6 +46,15 @@ for path in preset_dir.glob('*.json'):
         if address in seen or item['plugin'] != 'Skyrim.esm' or not 0 < item['form'] <= 0xFFFFFF or not 1 <= item['count'] <= 1000:
             raise ValueError('Invalid equipment item: ' + str(path))
         seen.add(address)
+# Локальная сборка из предоставленного пользователем Phantasm, с проверкой точной версии.
+from phantasm import inspect
+provider = root / 'SeverAction/97 Phantasm/00 Core'
+inspect(provider)
+for path in provider.rglob('*'):
+    if path.is_file():
+        name = path.relative_to(provider).as_posix()
+        if name in files: raise ValueError('Provider payload collision: ' + name)
+        files[name] = path
 files['NPCStudio.esp'] = data / 'NPCStudio.esp'
 files['NPCStudio_NND_DISTR.ini'] = data / 'NPCStudio_NND_DISTR.ini'
 for path in (game / 'fomod').rglob('*'):

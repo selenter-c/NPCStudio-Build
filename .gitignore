@@ -5,3 +5,5 @@ dist/
 **/obj/
 
 **/node_modules/
+
+__pycache__/
