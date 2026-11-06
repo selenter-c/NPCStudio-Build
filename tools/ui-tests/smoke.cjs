@@ -27,7 +27,17 @@ const fs = require('node:fs')
         state.femaleUsed = state.slots.filter(slot => slot.female).length
         state.maleUsed = state.slots.length - state.femaleUsed
       }
-      function equip(id, preset) { inventory.set(id, preset.items.map(item => ({ ...item, name: preset.name + ' · предмет', worn: true, kind: 'armor' }))) }
+      function equip(id, preset) {
+        const items = inventory.get(id)
+        for (const item of items) item.worn = false
+        for (const item of preset.items) {
+          const existing = items.find(entry => entry.plugin === item.plugin && entry.form === item.form)
+          if (existing) {
+            existing.count = Math.max(existing.count, item.count)
+            existing.worn = true
+          } else items.push({ ...item, name: preset.name + ' · предмет', worn: true, kind: 'armor' })
+        }
+      }
       function reply(payload) { refresh(); setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: structuredClone(state) }), 5) }
       refresh()
       window.magelight = {
@@ -86,6 +96,8 @@ const fs = require('node:fs')
           if (payload.action === 'addCategory') { state.library.categories.push(payload.name); state.library.categories.sort() }
           if (payload.action === 'applyEquipmentPreset') equip(actor.id, state.library.presets.find(preset => preset.id === payload.preset))
           if (payload.action === 'unequipItem') inventory.get(actor.id).find(item => item.form === payload.item.form).worn = false
+          if (payload.action === 'equipItem') inventory.get(actor.id).find(item => item.form === payload.item.form).worn = true
+          if (payload.action === 'removeItem') inventory.set(actor.id, inventory.get(actor.id).filter(item => item.plugin !== payload.item.plugin || item.form !== payload.item.form))
           if (payload.action === 'giveItem') {
             const existing = inventory.get(actor.id).find(item => item.form === payload.item.form)
             if (existing) existing.worn = true
@@ -100,7 +112,7 @@ const fs = require('node:fs')
             setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, catalog: [{ plugin: 'Skyrim.esm', form: 0x2150D, name: 'Броня стражника', count: 1, kind: 'armor', category: 'body' }] } }), 5)
             return
           }
-          if (['equipment', 'applyEquipmentPreset', 'giveItem', 'unequipItem'].includes(payload.action)) {
+          if (['equipment', 'applyEquipmentPreset', 'giveItem', 'equipItem', 'unequipItem', 'removeItem'].includes(payload.action)) {
             state.equipmentOwnerId = actor.id
             state.equipment = { inventory: inventory.get(actor.id), catalog: [{ plugin: 'Skyrim.esm', form: 0x2150D, name: 'Броня стражника', count: 1, worn: false, kind: 'armor' }], matches: 1 }
           }
@@ -197,7 +209,7 @@ const fs = require('node:fs')
     await page.waitForFunction(() => document.querySelector('#selectedName').textContent === 'Элара')
     await Tab('equipment')
     await page.waitForFunction(() => document.querySelectorAll('#equipmentInventory .equipment-item').length === 6)
-    assert.equal(await page.locator('#equipmentInventory .equipment-item').first().locator('button').last().textContent(), 'Снять')
+    assert.equal(await page.locator('#equipmentInventory .equipment-item').first().locator('button').first().textContent(), 'Снять')
     await page.locator('#equipmentInventory .equipment-item').first().click()
     await page.waitForFunction(() => !document.querySelector('#itemPreviewImage').hidden)
     assert.equal(await page.locator('#itemPreviewYaw').inputValue(), '180')
@@ -224,6 +236,20 @@ const fs = require('node:fs')
     await page.locator('#itemPreviewViewport').dispatchEvent('pointerup', { pointerId: 1 })
     await page.locator('#itemPreviewClose').click()
     assert.equal(await page.locator('#itemPreviewPanel').isVisible(), false)
+    assert.equal(await page.locator('#replaceLoadout').isEnabled(), false)
+    await Combo('inventoryPreset', 'Имперский легионер')
+    await page.locator('#replaceLoadout').click()
+    await page.waitForFunction(() => !EquipmentBusy && Equipment.inventory.some(Item => !Item.worn))
+    assert.equal(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'applyEquipmentPreset').preset), 'imperial-heavy')
+    const OldItem = page.locator('#equipmentInventory .equipment-item').filter({ has: page.getByRole('button', { name: 'Надеть', exact: true }) }).first()
+    await OldItem.getByRole('button', { name: 'Удалить', exact: true }).click()
+    await OldItem.getByRole('button', { name: 'Отмена' }).click()
+    assert.equal(await page.evaluate(() => window.testCommands.some(Command => Command.action === 'removeItem')), false)
+    const BeforeRemoval = await page.locator('#equipmentInventory .equipment-item').count()
+    await OldItem.getByRole('button', { name: 'Удалить', exact: true }).click()
+    await OldItem.getByRole('button', { name: /^Удалить ×/ }).click()
+    await page.waitForFunction(Count => !EquipmentBusy && Equipment.inventory.length === Count, BeforeRemoval - 1)
+    assert.ok(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'removeItem').identity))
     await Tab('roster')
     await page.locator('#park').click()
     await page.waitForFunction(() => document.querySelector('#status').textContent === 'Убран из мира')
@@ -357,6 +383,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.7.2: outfit editor, builtin protection, hotkey close, locale/theme/race/portrait/preview camera, custom combos/search, spawn preset, slots/history/reuse/399, categories, random names, settings, gear UI, escaping, stale identity, 5 pages at 720p/1080p passed')
+    console.log('UI 0.7.3: outfit editor, loadout replacement, confirmed item removal, builtin protection, hotkey close, locale/theme/race/portrait/preview camera, custom combos/search, spawn preset, slots/history/reuse/399, categories, random names, settings, escaping, stale identity, 5 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
