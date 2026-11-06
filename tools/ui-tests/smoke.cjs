@@ -61,13 +61,27 @@ const fs = require('node:fs')
           delete state.appearanceTarget
           if (payload.action === 'openState' && window.testAppearanceTarget) state.appearanceTarget = window.testAppearanceTarget
           const lookIdentity = 'look-' + (actor?.identity || payload.reference)
+          if (payload.action === 'hairThumbnailCancel') {
+            setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true } }), 5)
+            return
+          }
           if (['tryAppearance', 'appearanceFrame', 'hairThumbnail'].includes(payload.action)) {
             const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64
             const context = canvas.getContext('2d'); context.fillStyle = '#9c583d'; context.fillRect(0, 0, 64, 64)
             const preview = payload.action === 'hairThumbnail'
               ? { kind: 'hairThumbnail', token: payload.token, pending: true }
               : { kind: 'actor', identity: lookIdentity, pending: true }
+            if (payload.action === 'hairThumbnail' && window.testCachedHairShot) {
+              window.testCachedHairShot = false
+              const hairThumbnail = { ...preview, pending: false, image: canvas.toDataURL() }
+              setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, hairThumbnail } }), 5)
+              return
+            }
             setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, preview } }), 5)
+            if (payload.action === 'hairThumbnail' && window.testDropHairShot) {
+              window.testDropHairShot = false
+              return
+            }
             setTimeout(() => window.studioPreview({ ...preview, pending: false, image: canvas.toDataURL() }), 20)
             return
           }
@@ -288,8 +302,27 @@ const fs = require('node:fs')
     await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Элара' && !AppearanceBusy)
     assert.equal(await page.locator('#applyAppearance').isEnabled(), false)
     await page.waitForFunction(() => !document.querySelector('#appearanceImage').hidden)
+    assert.equal(await page.locator('#appearanceViewport .camera-toolbar button').count(),
+      await page.locator('#previewViewport .camera-toolbar button').count())
+    const LookCount = await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'appearanceFrame').length)
+    await page.evaluate(() => {
+      for (let Index = 0; Index < 100; Index++) {
+        Elements.appearanceYaw.value = String(Index)
+        Elements.appearanceYaw.dispatchEvent(new Event('input'))
+      }
+    })
+    await page.waitForFunction(() => window.testCommands.some(Command => Command.action === 'appearanceFrame' && Command.yaw === 99))
+    assert.ok(await page.evaluate(Count => window.testCommands.filter(Command => Command.action === 'appearanceFrame').length - Count <= 2, LookCount))
+    await page.locator('#appearanceViewport').dispatchEvent('pointerdown', { button: 2, clientX: 100, clientY: 100, pointerId: 1 })
+    await page.locator('#appearanceViewport').dispatchEvent('pointermove', { clientX: 130, clientY: 125, pointerId: 1 })
+    await page.locator('#appearanceViewport').dispatchEvent('pointerup', { pointerId: 1 })
+    await page.waitForFunction(() => window.testCommands.some(Command => Command.action === 'appearanceFrame' && Command.panX > 0))
+    await page.evaluate(() => { window.testDropHairShot = true })
     await page.locator('#openHairPicker').click()
+    await page.waitForFunction(() => HairShot && window.testDropHairShot === false)
+    await page.evaluate(() => { window.testCachedHairShot = true; return RecoverHairShot(HairShot.Token) })
     await page.waitForFunction(() => document.querySelector('#hairGrid .hair-thumb img'))
+    assert.ok(await page.evaluate(() => window.testCommands.some(Command => Command.action === 'hairThumbnailCancel')))
     assert.ok(await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'hairThumbnail').length < 12))
     await page.locator('#hairSearch').fill('ExampleHair.esp')
     assert.equal(await page.locator('#hairGrid .hair-card').count(), 1)
@@ -460,6 +493,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.1: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
+    console.log('UI 0.8.2: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
