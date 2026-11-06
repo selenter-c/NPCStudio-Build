@@ -99,7 +99,8 @@ const fs = require('node:fs')
           }
           if (['appearance', 'applyAppearance', 'setHeight'].includes(payload.action)) {
             const Key = actor?.identity || payload.reference
-            const Look = looks.get(Key) || { hair: 101, color: 201, hairName: 'Короткие', height: { percent: 100, min: 75, max: 125 } }
+            const Look = looks.get(Key) || { hair: 101, color: 201, hairName: 'Короткие', height: { percent: 100, min: 75, max: 125 },
+              faceSelection: { eyes: 301, brows: 401, beard: 501 } }
             if (payload.action === 'setHeight') {
               Look.height.percent = payload.percent
               looks.set(Key, Look)
@@ -110,9 +111,16 @@ const fs = require('node:fs')
               Look.hair = payload.hair
               Look.hairName = payload.hair === 101 ? 'Короткие' : 'Коса'
               Look.color = payload.color
+              Object.assign(Look.faceSelection, payload.faceParts)
               looks.set(Key, Look)
             }
-            const appearance = { ...Look, name: actor?.name || 'Лидия', available: true, hairAvailable: true, previewIdentity: lookIdentity,
+            const faceParts = {
+              eyes: { value: Look.faceSelection.eyes, options: [{ id: 301, name: 'Карие' }, { id: 302, name: 'Зелёные', plugin: 'ExampleEyes.esp' }] },
+              brows: { value: Look.faceSelection.brows, options: [{ id: 401, name: 'Тонкие' }, { id: 402, name: 'Густые' }] },
+            }
+            const male = actor?.female === false || payload.reference === 0x1A69A
+            if (male) faceParts.beard = { value: Look.faceSelection.beard, options: [{ id: 501, name: 'Без бороды' }, { id: 502, name: 'Короткая борода' }] }
+            const appearance = { ...Look, faceParts, name: actor?.name || (male ? 'Тестовый норд' : 'Лидия'), available: true, hairAvailable: true, previewIdentity: lookIdentity,
               hairs: [{ id: 101, name: 'Короткие', plugin: 'Skyrim.esm' }, { id: 102, name: 'Коса', plugin: 'ExampleHair.esp' },
                 ...Array.from({ length: 1000 }, (_, Index) => ({ id: 1000 + Index, name: 'Стиль ' + Index, plugin: 'OtherHair.esp' }))],
               colors: [{ id: 201, name: 'Русый', rgb: '#82543E' }, { id: 202, name: 'Чёрный', rgb: '#121212' }] }
@@ -377,6 +385,16 @@ const fs = require('node:fs')
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.hair === 102 && Appearance?.color === 202 && !AppearanceBusy)
     assert.ok(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'applyAppearance').identity))
+    await page.locator('#eyes').selectOption('302')
+    await page.locator('#brows').selectOption('402')
+    await page.waitForFunction(() => window.testCommands.some(Command => Command.action === 'tryAppearance' && Command.faceParts?.eyes === 302 && Command.faceParts?.brows === 402))
+    await page.locator('#cancelAppearance').click()
+    await page.waitForFunction(() => !AppearanceBusy && Elements.eyes.value === '301' && Elements.brows.value === '401')
+    assert.equal(await page.locator('#beardField').isVisible(), false)
+    await page.locator('#brows').selectOption('402')
+    await page.locator('#applyAppearance').click()
+    await page.waitForFunction(() => Appearance?.faceParts?.brows.value === 402 && !AppearanceBusy)
+    assert.equal(await page.locator('#hairStyle').inputValue(), '102')
     await page.locator('#npcHeight').fill('113')
     assert.equal(await page.locator('#npcHeightValue').textContent(), '113%')
     await page.locator('#applyNpcHeight').click()
@@ -395,6 +413,7 @@ const fs = require('node:fs')
       window.testEvents.__uimode('1')
     })
     await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Лидия' && !AppearanceBusy)
+    await page.locator('#eyes').selectOption('302')
     await page.locator('#npcHeight').fill('90')
     await page.locator('#applyNpcHeight').click()
     await page.waitForFunction(() => Appearance?.height?.percent === 90 && !AppearanceBusy)
@@ -405,10 +424,22 @@ const fs = require('node:fs')
     await page.locator('#hairSearch').fill('ExampleHair.esp')
     await page.locator('#hairGrid .hair-card').click()
     await page.locator('#applyAppearance').click()
-    await page.waitForFunction(() => Appearance?.hair === 102 && !AppearanceBusy)
+    await page.waitForFunction(() => Appearance?.hair === 102 && Appearance?.faceParts?.eyes.value === 302 && !AppearanceBusy)
     const ExternalCommand = await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'applyAppearance').at(-1))
     assert.equal(ExternalCommand.reference, 0xA2C94)
     assert.equal(ExternalCommand.id, undefined)
+    await page.evaluate(() => {
+      window.testAppearanceTarget = { reference: 0x1A69A }
+      window.testEvents.__uimode('0')
+      window.testEvents.__uimode('1')
+    })
+    await page.waitForFunction(() => Appearance?.name === 'Тестовый норд' && !AppearanceBusy)
+    await page.locator('#beard').selectOption('502')
+    await page.locator('#applyAppearance').click()
+    await page.waitForFunction(() => Appearance?.faceParts?.beard.value === 502 && !AppearanceBusy)
+    await page.locator('#beard').selectOption('501')
+    await page.locator('#applyAppearance').click()
+    await page.waitForFunction(() => Appearance?.faceParts?.beard.value === 501 && !AppearanceBusy)
     await page.evaluate(() => {
       window.testAppearanceTarget = null
       window.testEvents.__uimode('0')
@@ -549,6 +580,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.5: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
+    console.log('UI 0.8.6: hair, height, eyes, brows, beard, inventory, outfits, settings and previews at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
