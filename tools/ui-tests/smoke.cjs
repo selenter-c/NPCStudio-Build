@@ -19,6 +19,7 @@ const fs = require('node:fs')
       const used = new Set()
       const inventory = new Map()
       const savedPortraits = new Map()
+      const looks = new Map()
       let generation = 0
       window.testCommands = []
       window.testEvents = {}
@@ -57,6 +58,23 @@ const fs = require('node:fs')
           delete state.generatedName
           delete state.preview
           delete state.portrait
+          delete state.appearanceTarget
+          if (payload.action === 'openState' && window.testAppearanceTarget) state.appearanceTarget = window.testAppearanceTarget
+          if (['appearance', 'applyAppearance'].includes(payload.action)) {
+            const Key = actor?.identity || payload.reference
+            const Look = looks.get(Key) || { hair: 101, color: 201, hairName: 'Короткие' }
+            if (payload.action === 'applyAppearance') {
+              Look.hair = payload.hair
+              Look.hairName = payload.hair === 101 ? 'Короткие' : 'Коса'
+              Look.color = payload.color
+              looks.set(Key, Look)
+            }
+            const appearance = { ...Look, name: actor?.name || 'Лидия', available: true, hairAvailable: true,
+              hairs: [{ id: 101, name: 'Короткие' }, { id: 102, name: 'Коса' }],
+              colors: [{ id: 201, name: 'Русый', rgb: '#82543E' }, { id: 202, name: 'Чёрный', rgb: '#121212' }] }
+            setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, appearance } }), 5)
+            return
+          }
           if (payload.action === 'randomName') state.generatedName = { name: 'Эйра', source: 'NNDNord.json (Tamrielic Names / NND)' }
           if (payload.action === 'create') {
             const available = state.availableSlots.filter(slot => slot.female === payload.female).sort((a, b) => (a.history === 'used') - (b.history === 'used') || a.id - b.id)
@@ -250,7 +268,38 @@ const fs = require('node:fs')
     await OldItem.getByRole('button', { name: /^Удалить ×/ }).click()
     await page.waitForFunction(Count => !EquipmentBusy && Equipment.inventory.length === Count, BeforeRemoval - 1)
     assert.ok(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'removeItem').identity))
+    await page.evaluate(() => {
+      window.testAppearanceTarget = { id: State.slots[0].id }
+      window.testEvents.__uimode('0')
+      window.testEvents.__uimode('1')
+    })
+    await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Элара' && !AppearanceBusy)
+    assert.equal(await page.locator('#applyAppearance').isEnabled(), false)
+    await Combo('hairStyle', 'Коса')
+    await page.locator('.hair-swatch[aria-label="Чёрный"]').click()
+    await page.locator('#applyAppearance').click()
+    await page.waitForFunction(() => Appearance?.hair === 102 && Appearance?.color === 202 && !AppearanceBusy)
+    assert.ok(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'applyAppearance').identity))
+    await page.evaluate(() => {
+      window.testAppearanceTarget = { reference: 0xA2C94 }
+      window.testEvents.__uimode('0')
+      window.testEvents.__uimode('1')
+    })
+    await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Лидия' && !AppearanceBusy)
+    await Combo('hairStyle', 'Коса')
+    await page.locator('#applyAppearance').click()
+    await page.waitForFunction(() => Appearance?.hair === 102 && !AppearanceBusy)
+    const ExternalCommand = await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'applyAppearance').at(-1))
+    assert.equal(ExternalCommand.reference, 0xA2C94)
+    assert.equal(ExternalCommand.id, undefined)
+    await page.evaluate(() => {
+      window.testAppearanceTarget = null
+      window.testEvents.__uimode('0')
+      window.testEvents.__uimode('1')
+    })
+    await page.waitForFunction(() => CurrentTab === 'create' && !AppearanceTarget)
     await Tab('roster')
+    await page.locator('#list .npc').first().click()
     await page.locator('#park').click()
     await page.waitForFunction(() => document.querySelector('#status').textContent === 'Убран из мира')
     await page.locator('#summon').click()
@@ -355,7 +404,7 @@ const fs = require('node:fs')
     await page.locator('#search').fill('последний')
     assert.equal(await page.locator('.npc').count(), 1)
     await page.locator('#search').fill('')
-    for (const tab of ['create', 'roster', 'equipment', 'presets', 'settings']) {
+    for (const tab of ['create', 'roster', 'equipment', 'presets', 'appearance', 'settings']) {
       await Tab(tab)
       for (const viewport of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
         await page.setViewportSize(viewport)
@@ -383,6 +432,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.7.3: outfit editor, loadout replacement, confirmed item removal, builtin protection, hotkey close, locale/theme/race/portrait/preview camera, custom combos/search, spawn preset, slots/history/reuse/399, categories, random names, settings, escaping, stale identity, 5 pages at 720p/1080p passed')
+    console.log('UI 0.8.0: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
