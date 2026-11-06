@@ -61,6 +61,18 @@ const fs = require('node:fs')
           delete state.appearanceTarget
           if (payload.action === 'openState' && window.testAppearanceTarget) state.appearanceTarget = window.testAppearanceTarget
           const lookIdentity = 'look-' + (actor?.identity || payload.reference)
+          if (payload.action === 'hairThumbnailCache') {
+            const hairThumbnails = {}
+            if (window.testBatchHairShot && payload.hairs.length > 1) {
+              const canvas = document.createElement('canvas')
+              const id = payload.hairs[1]
+              hairThumbnails[id] = canvas.toDataURL()
+              window.testBatchHairId = id
+              window.testBatchHairShot = false
+            }
+            setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, hairThumbnails } }), 5)
+            return
+          }
           if (payload.action === 'hairThumbnailCancel') {
             setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true } }), 5)
             return
@@ -334,11 +346,13 @@ const fs = require('node:fs')
     assert.equal(await page.evaluate(() => window.testCommands.some(Command => Command.action === 'hairThumbnail')), false)
     await page.locator('#cancelAppearance').click()
     await page.waitForFunction(() => !AppearanceBusy && Elements.hairStep.value === '0')
-    await page.evaluate(() => { window.testDropHairShot = true })
+    await page.evaluate(() => { window.testDropHairShot = true; window.testBatchHairShot = true })
     await page.locator('#openHairPicker').click()
     await page.waitForFunction(() => HairShot && window.testDropHairShot === false)
+    await page.waitForFunction(() => window.testBatchHairId && document.querySelector('[data-hair="' + window.testBatchHairId + '"] img'))
+    assert.equal(await page.evaluate(() => window.testCommands.some(Command => Command.action === 'hairThumbnail' && Command.hair === window.testBatchHairId)), false)
     await page.evaluate(() => { window.testCachedHairShot = true; return RecoverHairShot(HairShot.Token) })
-    await page.waitForFunction(() => document.querySelector('#hairGrid .hair-thumb img'))
+    await page.waitForFunction(() => !window.testCachedHairShot && document.querySelectorAll('#hairGrid .hair-thumb img').length > 1)
     assert.ok(await page.evaluate(() => window.testCommands.some(Command => Command.action === 'hairThumbnailCancel')))
     assert.ok(await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'hairThumbnail').length < 12))
     await page.locator('#hairSearch').fill('ExampleHair.esp')
@@ -511,6 +525,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.3: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
+    console.log('UI 0.8.4: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })

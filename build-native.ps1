@@ -178,7 +178,7 @@ if (-not (Test-Path $dllPath)) { $dllPath = Join-Path $buildDir "$Config\NPCStud
 if (-not (Test-Path $dllPath)) { $dllPath = Join-Path $buildDir "bin\$Config\NPCStudio.dll" }
 
 if (Test-Path $dllPath) {
-    $stamp = @{ version = '0.8.3'; sourceHash = (Get-NativeSourceHash $nativeDir); dllHash = (Get-FileDigest $dllPath); validation = 'compiled; runtime unverified' }
+    $stamp = @{ version = '0.8.4'; sourceHash = (Get-NativeSourceHash $nativeDir); dllHash = (Get-FileDigest $dllPath); validation = 'compiled; runtime unverified' }
     $stamp | ConvertTo-Json | Set-Content -LiteralPath (Join-Path (Split-Path -Parent $dllPath) 'NPCStudio.build.json') -Encoding UTF8
     $sizeKB = [math]::Round((Get-Item $dllPath).Length / 1KB)
     Write-Host ""
