@@ -100,7 +100,7 @@ const fs = require('node:fs')
           if (['appearance', 'applyAppearance', 'setHeight'].includes(payload.action)) {
             const Key = actor?.identity || payload.reference
             const Look = looks.get(Key) || { hair: 101, color: 201, hairName: 'Короткие', height: { percent: 100, min: 75, max: 125 },
-              faceSelection: { eyes: 301, brows: 401, beard: 501 } }
+              faceSelection: { eyes: 301, brows: 401, beard: 501 }, skinValue: -1 }
             if (payload.action === 'setHeight') {
               Look.height.percent = payload.percent
               looks.set(Key, Look)
@@ -112,6 +112,7 @@ const fs = require('node:fs')
               Look.hairName = payload.hair === 101 ? 'Короткие' : 'Коса'
               Look.color = payload.color
               Object.assign(Look.faceSelection, payload.faceParts)
+              Look.skinValue = payload.skin ?? -1
               looks.set(Key, Look)
             }
             const faceParts = {
@@ -120,7 +121,8 @@ const fs = require('node:fs')
             }
             const male = actor?.female === false || payload.reference === 0x1A69A
             if (male) faceParts.beard = { value: Look.faceSelection.beard, options: [{ id: 501, name: 'Без бороды' }, { id: 502, name: 'Короткая борода' }] }
-            const appearance = { ...Look, faceParts, name: actor?.name || (male ? 'Тестовый норд' : 'Лидия'), available: true, hairAvailable: true, previewIdentity: lookIdentity,
+            const skin = { value: Look.skinValue, options: [{ id: -1, name: 'Исходный тон', rgb: '#B88F75' }, { id: 0x905D43, name: 'Тёплый', rgb: '#905D43' }] }
+            const appearance = { ...Look, faceParts, skin, name: actor?.name || (male ? 'Тестовый норд' : 'Лидия'), available: true, hairAvailable: true, previewIdentity: lookIdentity,
               hairs: [{ id: 101, name: 'Короткие', plugin: 'Skyrim.esm' }, { id: 102, name: 'Коса', plugin: 'ExampleHair.esp' },
                 ...Array.from({ length: 1000 }, (_, Index) => ({ id: 1000 + Index, name: 'Стиль ' + Index, plugin: 'OtherHair.esp' }))],
               colors: [{ id: 201, name: 'Русый', rgb: '#82543E' }, { id: 202, name: 'Чёрный', rgb: '#121212' }] }
@@ -344,6 +346,13 @@ const fs = require('node:fs')
     await page.locator('#appearanceViewport').dispatchEvent('pointerup', { pointerId: 1 })
     await page.waitForFunction(() => window.testCommands.some(Command => Command.action === 'appearanceFrame' && Command.panX > 0))
     assert.equal(await page.locator('#hairStep').getAttribute('max'), '1001')
+    await page.locator('#hairStep').hover()
+    await page.keyboard.press('ArrowRight')
+    assert.equal(await page.locator('#hairStep').inputValue(), '1')
+    assert.equal(await page.locator('#hairStyle').inputValue(), '102')
+    await page.keyboard.press('ArrowLeft')
+    assert.equal(await page.locator('#hairStep').inputValue(), '0')
+    await page.waitForFunction(() => !LookFrameBusy && LookFrameTimer === null)
     const TryCount = await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'tryAppearance').length)
     await page.evaluate(() => {
       for (const Index of [300, 600, 900, 1]) {
@@ -385,16 +394,34 @@ const fs = require('node:fs')
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.hair === 102 && Appearance?.color === 202 && !AppearanceBusy)
     assert.ok(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'applyAppearance').identity))
-    await page.locator('#eyes').selectOption('302')
-    await page.locator('#brows').selectOption('402')
+    const LookTab = Key => page.locator('[data-look-tab="' + Key + '"]').click()
+    await LookTab('eyes')
+    assert.equal(await page.locator('#facePartsEditor [role=combobox]').count(), 0)
+    assert.equal(await page.locator('#lookFace').getAttribute('aria-pressed'), 'true')
+    await page.locator('#faceSearch').fill('ExampleEyes')
+    assert.equal(await page.locator('#faceChoices button').count(), 1)
+    await page.locator('#faceChoices button').click()
+    await LookTab('brows')
+    await page.locator('#faceStep').hover()
+    await page.keyboard.press('ArrowRight')
     await page.waitForFunction(() => window.testCommands.some(Command => Command.action === 'tryAppearance' && Command.faceParts?.eyes === 302 && Command.faceParts?.brows === 402))
     await page.locator('#cancelAppearance').click()
     await page.waitForFunction(() => !AppearanceBusy && Elements.eyes.value === '301' && Elements.brows.value === '401')
-    assert.equal(await page.locator('#beardField').isVisible(), false)
-    await page.locator('#brows').selectOption('402')
+    assert.equal(await page.locator('[data-look-tab=beard]').isVisible(), false)
+    await page.locator('#faceChoices [data-part="402"]').click()
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.faceParts?.brows.value === 402 && !AppearanceBusy)
     assert.equal(await page.locator('#hairStyle').inputValue(), '102')
+    await LookTab('skin')
+    await page.locator('#skinStep').hover()
+    await page.keyboard.press('ArrowRight')
+    await page.waitForFunction(() => window.testCommands.some(Command => Command.action === 'tryAppearance' && Command.skin === 0x905D43))
+    await page.locator('#applyAppearance').click()
+    await page.waitForFunction(() => Appearance?.skin.value === 0x905D43 && !AppearanceBusy)
+    await page.locator('#skinSwatches [data-tone="-1"]').click()
+    await page.locator('#cancelAppearance').click()
+    await page.waitForFunction(() => LookSkin === 0x905D43 && !AppearanceBusy)
+    await LookTab('height')
     await page.locator('#npcHeight').fill('113')
     assert.equal(await page.locator('#npcHeightValue').textContent(), '113%')
     await page.locator('#applyNpcHeight').click()
@@ -413,13 +440,16 @@ const fs = require('node:fs')
       window.testEvents.__uimode('1')
     })
     await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Лидия' && !AppearanceBusy)
-    await page.locator('#eyes').selectOption('302')
+    await LookTab('eyes')
+    await page.locator('#faceChoices [data-part="302"]').click()
+    await LookTab('height')
     await page.locator('#npcHeight').fill('90')
     await page.locator('#applyNpcHeight').click()
     await page.waitForFunction(() => Appearance?.height?.percent === 90 && !AppearanceBusy)
     const ExternalHeight = await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'setHeight').at(-1))
     assert.equal(ExternalHeight.reference, 0xA2C94)
     assert.equal(ExternalHeight.id, undefined)
+    await LookTab('hair')
     await page.locator('#openHairPicker').click()
     await page.locator('#hairSearch').fill('ExampleHair.esp')
     await page.locator('#hairGrid .hair-card').click()
@@ -434,10 +464,11 @@ const fs = require('node:fs')
       window.testEvents.__uimode('1')
     })
     await page.waitForFunction(() => Appearance?.name === 'Тестовый норд' && !AppearanceBusy)
-    await page.locator('#beard').selectOption('502')
+    await LookTab('beard')
+    await page.locator('#faceChoices [data-part="502"]').click()
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.faceParts?.beard.value === 502 && !AppearanceBusy)
-    await page.locator('#beard').selectOption('501')
+    await page.locator('#faceChoices [data-part="501"]').click()
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.faceParts?.beard.value === 501 && !AppearanceBusy)
     await page.evaluate(() => {
@@ -580,6 +611,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.6: hair, height, eyes, brows, beard, inventory, outfits, settings and previews at 720p/1080p passed')
+    console.log('UI 0.8.7: appearance tabs, hover arrows, facial cards, skin palette, height, inventory, outfits and previews at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
