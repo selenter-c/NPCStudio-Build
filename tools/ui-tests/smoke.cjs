@@ -60,6 +60,17 @@ const fs = require('node:fs')
           delete state.portrait
           delete state.appearanceTarget
           if (payload.action === 'openState' && window.testAppearanceTarget) state.appearanceTarget = window.testAppearanceTarget
+          const lookIdentity = 'look-' + (actor?.identity || payload.reference)
+          if (['tryAppearance', 'appearanceFrame', 'hairThumbnail'].includes(payload.action)) {
+            const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64
+            const context = canvas.getContext('2d'); context.fillStyle = '#9c583d'; context.fillRect(0, 0, 64, 64)
+            const preview = payload.action === 'hairThumbnail'
+              ? { kind: 'hairThumbnail', token: payload.token, pending: true }
+              : { kind: 'actor', identity: lookIdentity, pending: true }
+            setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, preview } }), 5)
+            setTimeout(() => window.studioPreview({ ...preview, pending: false, image: canvas.toDataURL() }), 20)
+            return
+          }
           if (['appearance', 'applyAppearance'].includes(payload.action)) {
             const Key = actor?.identity || payload.reference
             const Look = looks.get(Key) || { hair: 101, color: 201, hairName: 'Короткие' }
@@ -69,8 +80,9 @@ const fs = require('node:fs')
               Look.color = payload.color
               looks.set(Key, Look)
             }
-            const appearance = { ...Look, name: actor?.name || 'Лидия', available: true, hairAvailable: true,
-              hairs: [{ id: 101, name: 'Короткие' }, { id: 102, name: 'Коса' }],
+            const appearance = { ...Look, name: actor?.name || 'Лидия', available: true, hairAvailable: true, previewIdentity: lookIdentity,
+              hairs: [{ id: 101, name: 'Короткие', plugin: 'Skyrim.esm' }, { id: 102, name: 'Коса', plugin: 'ExampleHair.esp' },
+                ...Array.from({ length: 1000 }, (_, Index) => ({ id: 1000 + Index, name: 'Стиль ' + Index, plugin: 'OtherHair.esp' }))],
               colors: [{ id: 201, name: 'Русый', rgb: '#82543E' }, { id: 202, name: 'Чёрный', rgb: '#121212' }] }
             setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, appearance } }), 5)
             return
@@ -275,7 +287,21 @@ const fs = require('node:fs')
     })
     await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Элара' && !AppearanceBusy)
     assert.equal(await page.locator('#applyAppearance').isEnabled(), false)
-    await Combo('hairStyle', 'Коса')
+    await page.waitForFunction(() => !document.querySelector('#appearanceImage').hidden)
+    await page.locator('#openHairPicker').click()
+    await page.waitForFunction(() => document.querySelector('#hairGrid .hair-thumb img'))
+    assert.ok(await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'hairThumbnail').length < 12))
+    await page.locator('#hairSearch').fill('ExampleHair.esp')
+    assert.equal(await page.locator('#hairGrid .hair-card').count(), 1)
+    await page.locator('#hairGrid .hair-card').click()
+    await page.locator('.hair-swatch[aria-label="Чёрный"]').click()
+    await page.waitForFunction(() => window.testCommands.some(Command => Command.action === 'tryAppearance' && Command.hair === 102 && Command.color === 202))
+    assert.equal(await page.evaluate(() => Appearance.hair), 101)
+    await page.locator('#cancelAppearance').click()
+    await page.waitForFunction(() => !AppearanceBusy && document.querySelector('#hairStyle').value === '101')
+    await page.locator('#openHairPicker').click()
+    await page.locator('#hairSearch').fill('ExampleHair.esp')
+    await page.locator('#hairGrid .hair-card').click()
     await page.locator('.hair-swatch[aria-label="Чёрный"]').click()
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.hair === 102 && Appearance?.color === 202 && !AppearanceBusy)
@@ -286,7 +312,9 @@ const fs = require('node:fs')
       window.testEvents.__uimode('1')
     })
     await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Лидия' && !AppearanceBusy)
-    await Combo('hairStyle', 'Коса')
+    await page.locator('#openHairPicker').click()
+    await page.locator('#hairSearch').fill('ExampleHair.esp')
+    await page.locator('#hairGrid .hair-card').click()
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.hair === 102 && !AppearanceBusy)
     const ExternalCommand = await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'applyAppearance').at(-1))
@@ -432,6 +460,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.0: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
+    console.log('UI 0.8.1: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })

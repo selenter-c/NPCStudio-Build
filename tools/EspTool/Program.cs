@@ -43,6 +43,8 @@ if (mode == "generate") {
     };
     anchor.Base.SetTo(new FormKey(source.ModKey, 0x3B));
     cell.Persistent.Add(anchor);
+    for (uint id = 0x802; id <= 0x803; ++id)
+        mod.MiscItems.Add(new MiscItem(Own(id), release) { EditorID = $"NPCStudioHairRender{id:X}" });
     var slots = new List<object>();
     for (uint id = 0; id < 400; id++) {
         bool isFemale = Female(id);
@@ -102,6 +104,9 @@ using (var check = SkyrimMod.CreateFromBinaryOverlay(espPath, release)) {
     var anchor = cells.Single().Persistent.OfType<IPlacedObjectGetter>().Single(a => a.FormKey == Own(0x801));
     if (anchor.Base.FormKey != new FormKey(ModKey.FromNameAndExtension("Skyrim.esm"), 0x3B) ||
         (anchor.MajorRecordFlagsRaw & (int)PlacedNpc.MajorFlag.Persistent) == 0) throw new InvalidDataException("Неверный резервный маркер");
+    if (check.MiscItems.Count != 2 || !check.MiscItems.Any(item => item.FormKey == Own(0x802)) ||
+        !check.MiscItems.Any(item => item.FormKey == Own(0x803)))
+        throw new InvalidDataException("Отсутствуют формы для миниатюр причёсок");
     using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
     if (manifest.RootElement.GetProperty("schemaVersion").GetInt32() != 3 || manifest.RootElement.GetProperty("plugin").GetString() != "NPCStudio.esp")
         throw new InvalidDataException("Неизвестная схема манифеста");
