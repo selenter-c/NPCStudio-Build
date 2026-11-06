@@ -97,9 +97,15 @@ const fs = require('node:fs')
             setTimeout(() => window.studioPreview({ ...preview, pending: false, image: canvas.toDataURL() }), 20)
             return
           }
-          if (['appearance', 'applyAppearance'].includes(payload.action)) {
+          if (['appearance', 'applyAppearance', 'setHeight'].includes(payload.action)) {
             const Key = actor?.identity || payload.reference
-            const Look = looks.get(Key) || { hair: 101, color: 201, hairName: 'Короткие' }
+            const Look = looks.get(Key) || { hair: 101, color: 201, hairName: 'Короткие', height: { percent: 100, min: 75, max: 125 } }
+            if (payload.action === 'setHeight') {
+              Look.height.percent = payload.percent
+              looks.set(Key, Look)
+              setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, height: Look.height } }), 5)
+              return
+            }
             if (payload.action === 'applyAppearance') {
               Look.hair = payload.hair
               Look.hairName = payload.hair === 101 ? 'Короткие' : 'Коса'
@@ -371,12 +377,30 @@ const fs = require('node:fs')
     await page.locator('#applyAppearance').click()
     await page.waitForFunction(() => Appearance?.hair === 102 && Appearance?.color === 202 && !AppearanceBusy)
     assert.ok(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'applyAppearance').identity))
+    await page.locator('#npcHeight').fill('113')
+    assert.equal(await page.locator('#npcHeightValue').textContent(), '113%')
+    await page.locator('#applyNpcHeight').click()
+    await page.waitForFunction(() => Appearance?.height?.percent === 113 && !AppearanceBusy)
+    assert.ok(await page.evaluate(() => window.testCommands.find(Command => Command.action === 'setHeight' && Command.percent === 113).identity))
+    assert.equal(await page.locator('#hairStyle').inputValue(), '102')
+    await page.locator('#appearanceRefresh').click()
+    await page.waitForFunction(() => Appearance?.height?.percent === 113 && !AppearanceBusy)
+    await page.locator('#resetNpcHeight').click()
+    assert.equal(await page.locator('#npcHeightValue').textContent(), '100%')
+    await page.locator('#applyNpcHeight').click()
+    await page.waitForFunction(() => Appearance?.height?.percent === 100 && !AppearanceBusy)
     await page.evaluate(() => {
       window.testAppearanceTarget = { reference: 0xA2C94 }
       window.testEvents.__uimode('0')
       window.testEvents.__uimode('1')
     })
     await page.waitForFunction(() => CurrentTab === 'appearance' && Appearance?.name === 'Лидия' && !AppearanceBusy)
+    await page.locator('#npcHeight').fill('90')
+    await page.locator('#applyNpcHeight').click()
+    await page.waitForFunction(() => Appearance?.height?.percent === 90 && !AppearanceBusy)
+    const ExternalHeight = await page.evaluate(() => window.testCommands.filter(Command => Command.action === 'setHeight').at(-1))
+    assert.equal(ExternalHeight.reference, 0xA2C94)
+    assert.equal(ExternalHeight.id, undefined)
     await page.locator('#openHairPicker').click()
     await page.locator('#hairSearch').fill('ExampleHair.esp')
     await page.locator('#hairGrid .hair-card').click()
@@ -525,6 +549,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.4: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
+    console.log('UI 0.8.5: crosshair appearance, hairstyle and palette, inventory actions, outfit editor, hotkey, locale/theme/race/portrait/camera, slots and 6 pages at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })
