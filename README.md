@@ -32,9 +32,9 @@ Run these commands from `NPCStudio-Build` in PowerShell.
 .\build-clean.bat
 ```
 
-The incremental build regenerates and validates the ESP, compiles the native DLL, runs CTest, and writes `dist/NPCStudio-0.8.7-beta.3-fomod.zip`. Use the clean build when the native toolchain or its dependencies change.
+The incremental build regenerates and validates the ESP, compiles the native DLL, runs CTest, and writes `dist/NPCStudio-0.8.7-beta.3-local-fomod.zip`. Use the clean build when the native toolchain or its dependencies change.
 
-To repackage an existing, verified DLL, run `.\pack-mo2.ps1`. The packer includes the verified 3D preview files from the local [SeverActions 4.7.0](https://github.com/Severause/SeverActions/releases/tag/v4.7.0) reference archive. The source directory is defined in `tools/pack.py`.
+To repackage an existing, verified DLL, run `.\pack-mo2.ps1`. The packer includes the verified 3D preview files from the local [SeverActions 4.7.0](https://github.com/Severause/SeverActions/releases/tag/v4.7.0) reference archive. The source directory is defined in `tools/pack.py`. Use `.\pack-mo2.ps1 -Public` to create the release ZIP for use with `Prepare-NPCStudio.ps1`.
 
 ## Test the UI
 

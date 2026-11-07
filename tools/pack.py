@@ -15,6 +15,7 @@ parser.add_argument('--root', type=Path, required=True)
 parser.add_argument('--dll', type=Path, required=True)
 parser.add_argument('--source-hash', required=True)
 parser.add_argument('--version', default='')
+parser.add_argument('--public', action='store_true')
 args = parser.parse_args()
 root = args.root.resolve()
 game = root / 'NPCStudio-GamePlugin'
@@ -52,11 +53,13 @@ for path in preset_dir.glob('*.json'):
         seen.add(address)
 # Сохраняем исходные пути, чтобы MO2 предоставлял игре только одну копию рендера.
 provider = root / 'SeverAction/97 Phantasm/00 Core'
-inspect(provider)
-rendererFiles = ['Interface/phantasm.swf', 'SKSE/Plugins/Phantasm.dll',
-    'SKSE/Plugins/Phantasm/VERSION.txt']
-rendererFiles.extend(path.relative_to(provider).as_posix()
-    for path in (provider / 'SKSE/Plugins/Phantasm/Licenses').glob('*.txt') if path.is_file())
+rendererFiles = []
+if not args.public:
+    inspect(provider)
+    rendererFiles = ['Interface/phantasm.swf', 'SKSE/Plugins/Phantasm.dll',
+        'SKSE/Plugins/Phantasm/VERSION.txt']
+    rendererFiles.extend(path.relative_to(provider).as_posix()
+        for path in (provider / 'SKSE/Plugins/Phantasm/Licenses').glob('*.txt') if path.is_file())
 for name in rendererFiles:
     entry = 'Core/' + name
     if entry in files:
@@ -102,10 +105,13 @@ for name in files:
         raise ValueError('Legacy payload: ' + name)
     if name.lower().startswith('core/skse/plugins/magelight'):
         raise ValueError('Unexpected Magelight runtime in payload: ' + name)
+    if args.public and name.lower().startswith(('core/interface/', 'core/skse/plugins/phantasm')):
+        raise ValueError('Third-party renderer in public payload: ' + name)
 dist = root / 'NPCStudio-Build/dist'
 dist.mkdir(exist_ok=True)
 package_label = package_version if '-' in package_version else f'{version}-beta'
-output = dist / f'NPCStudio-{package_label}-fomod.zip'
+suffix = 'fomod' if args.public else 'local-fomod'
+output = dist / f'NPCStudio-{package_label}-{suffix}.zip'
 with tempfile.NamedTemporaryFile(dir=dist, suffix='.zip', delete=False) as temporary:
     temp = Path(temporary.name)
 try:
