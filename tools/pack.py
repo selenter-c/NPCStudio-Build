@@ -1,4 +1,4 @@
-"""Build the release FOMOD or a local package with the pinned renderer."""
+"""Build the FOMOD with the pinned renderer."""
 import argparse
 import hashlib
 import json
@@ -8,13 +8,13 @@ import re
 import tempfile
 import xml.etree.ElementTree as Xml
 import zipfile
+from phantasm import inspect
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=Path, required=True)
 parser.add_argument('--dll', type=Path, required=True)
 parser.add_argument('--source-hash', required=True)
 parser.add_argument('--version', default='')
-parser.add_argument('--include-phantasm', action='store_true')
 args = parser.parse_args()
 root = args.root.resolve()
 game = root / 'NPCStudio-GamePlugin'
@@ -50,16 +50,18 @@ for path in preset_dir.glob('*.json'):
         if address in seen or item['plugin'] != 'Skyrim.esm' or not 0 < item['form'] <= 0xFFFFFF or not 1 <= item['count'] <= 1000:
             raise ValueError('Invalid equipment item: ' + str(path))
         seen.add(address)
-# Локальная сборка из предоставленного пользователем Phantasm, с проверкой точной версии.
-if args.include_phantasm:
-    from phantasm import inspect
-    provider = root / 'SeverAction/97 Phantasm/00 Core'
-    inspect(provider)
-    for path in provider.rglob('*'):
-        if path.is_file():
-            name = 'Core/' + path.relative_to(provider).as_posix()
-            if name in files: raise ValueError('Provider payload collision: ' + name)
-            files[name] = path
+# Сохраняем исходные пути, чтобы MO2 предоставлял игре только одну копию рендера.
+provider = root / 'SeverAction/97 Phantasm/00 Core'
+inspect(provider)
+rendererFiles = ['Interface/phantasm.swf', 'SKSE/Plugins/Phantasm.dll',
+    'SKSE/Plugins/Phantasm/VERSION.txt']
+rendererFiles.extend(path.relative_to(provider).as_posix()
+    for path in (provider / 'SKSE/Plugins/Phantasm/Licenses').glob('*.txt') if path.is_file())
+for name in rendererFiles:
+    entry = 'Core/' + name
+    if entry in files:
+        raise ValueError('Provider payload collision: ' + entry)
+    files[entry] = provider / name
 files['Core/NPCStudio.esp'] = data / 'NPCStudio.esp'
 files['Optional/NND/NPCStudio_NND_DISTR.ini'] = data / 'NPCStudio_NND_DISTR.ini'
 for path in (game / 'fomod').rglob('*'):
@@ -84,6 +86,7 @@ for name, path in notices.items():
 required = ['Core/NPCStudio.esp', 'Optional/NND/NPCStudio_NND_DISTR.ini', 'Core/SKSE/Plugins/NPCStudio.dll',
     'Core/SKSE/Plugins/NPCStudio/slots.json', 'fomod/info.xml', 'fomod/ModuleConfig.xml']
 required += ['Core/Magelight/NPCStudio/views/studio/' + name for name in ('index.html', 'script.js', 'style.css', 'i18n.js', 'appearance.js', 'presets.js')]
+required += ['Core/' + name for name in rendererFiles]
 for name in required:
     if name not in files or not files[name].is_file(): raise ValueError('Missing payload: ' + name)
 config = Xml.parse(game / 'fomod/ModuleConfig.xml')
@@ -97,13 +100,11 @@ for item in config.iter():
 for name in files:
     if name.startswith(('Core/PrismaUI/', 'Core/Scripts/')) or '\\' in name or name.lower().endswith('.psc'):
         raise ValueError('Legacy payload: ' + name)
-    if not args.include_phantasm and name.lower().startswith(('core/interface/', 'core/skse/plugins/phantasm', 'core/skse/plugins/magelight')):
-        raise ValueError('Third-party runtime in release payload: ' + name)
+    if name.lower().startswith('core/skse/plugins/magelight'):
+        raise ValueError('Unexpected Magelight runtime in payload: ' + name)
 dist = root / 'NPCStudio-Build/dist'
 dist.mkdir(exist_ok=True)
 package_label = package_version if '-' in package_version else f'{version}-beta'
-if args.include_phantasm:
-    package_label += '-local'
 output = dist / f'NPCStudio-{package_label}-fomod.zip'
 with tempfile.NamedTemporaryFile(dir=dist, suffix='.zip', delete=False) as temporary:
     temp = Path(temporary.name)

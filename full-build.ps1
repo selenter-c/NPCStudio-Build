@@ -20,9 +20,6 @@
     Force clean rebuild of C++ plugin (delete build/ and recompile all).
     Without this flag, only changed files are recompiled (incremental build).
 
-.PARAMETER IncludePhantasm
-    Include the locally supplied Phantasm renderer in a separate local-only package.
-
 .EXAMPLE
     .\full-build.ps1                    # Incremental build + pack (fast)
     .\full-build.ps1 -Clean             # Full rebuild from scratch + pack
@@ -33,8 +30,7 @@ param(
     [ValidateSet("Release", "Debug")]
     [string]$Config = "Release",
     [string]$VcpkgRoot = "",
-    [switch]$Clean,
-    [switch]$IncludePhantasm
+    [switch]$Clean
 )
 
 Set-StrictMode -Version Latest
@@ -99,7 +95,7 @@ Write-Host "--------------------------------------------" -ForegroundColor Yello
 Write-Host "  STEP 3/3: Packing for Mod Organizer 2" -ForegroundColor Yellow
 Write-Host "--------------------------------------------" -ForegroundColor Yellow
 
-& "$PSScriptRoot\pack-mo2.ps1" -IncludePhantasm:$IncludePhantasm
+& "$PSScriptRoot\pack-mo2.ps1"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""

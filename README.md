@@ -32,9 +32,9 @@ Run these commands from `NPCStudio-Build` in PowerShell.
 .\build-clean.bat
 ```
 
-The incremental build regenerates and validates the ESP, compiles the native DLL, runs CTest, and writes `dist/NPCStudio-0.8.7-beta.2-fomod.zip`. Use the clean build when the native toolchain or its dependencies change.
+The incremental build regenerates and validates the ESP, compiles the native DLL, runs CTest, and writes `dist/NPCStudio-0.8.7-beta.3-fomod.zip`. Use the clean build when the native toolchain or its dependencies change.
 
-To repackage an existing, verified DLL, run `.pack-mo2.ps1`. For a local-only archive that includes Phantasm, place the renderer from [SeverActions 4.7.0](https://github.com/Severause/SeverActions/releases/tag/v4.7.0) in the sibling path `SeverAction/97 Phantasm/00 Core` and run `.pack-mo2.ps1 -IncludePhantasm`. The packer verifies the exact renderer binary before producing a separate local archive. The release archive expects the renderer to be installed from upstream.
+To repackage an existing, verified DLL, run `.\pack-mo2.ps1`. The packer includes the verified 3D preview files from the local [SeverActions 4.7.0](https://github.com/Severause/SeverActions/releases/tag/v4.7.0) reference archive. The source directory is defined in `tools/pack.py`.
 
 ## Test the UI
 
