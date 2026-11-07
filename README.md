@@ -1,26 +1,52 @@
-# NPCStudio 0.6.3
+# NPC Studio Build Tools
 
-Пользователь: голова исчезает после Nord→save/restart→Orc→save/restart. 0.6.2 не исправила баг полностью. Новое исправление: перед восстановлением частей головы явно восстанавливать TESRaceForm::race базы NPC, даже если Actor.GetRace уже равен назначенной расе. Ранее восстанавливался только Actor, а базовый RNAM мог остаться исходным. Добавлена диагностика восстановления. В игре ещё не проверено.
-UI: колесо теперь меняет масштаб шагом .15 без потери из-за quantization range step .1; кнопки расположены крестом, общий вид управления NPC/item, свет для предмета с custom combo. Предмет выбирается кликом по строке (role button, Enter/Space), кнопка выдачи не выбирает предмет. Hover удалён. Правый preview занимает отдельный grid track, overlay/sticky отключены. Roster список расширен и увеличен по высоте, inspector фиксирован330px, отображается parent-cell location. Добавлена пересъёмка портрета. OnStill принимает фактические размеры до1024 вместо молчаливого отбрасывания всего кроме144; причина отказа пишется в лог.
-Проверки: Chrome mock UI, wheel delta -1 изменяет scale, panel не пересекает item list по bounding box, pointer drag до отпускания; build.bat CTest2/Mutagen/ZIP. Портреты/голова требуют реального теста. Старые схемы/миграции не добавлены. Установка одним ZIP, запуск вручную.
+Build and package [NPC Studio](https://github.com/selenter-c/NPCStudio-GamePlugin) for Skyrim Special Edition 1.6.1170. NPC Studio creates blank, persistent NPCs for editing in game and for AI-driven playthroughs with [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin).
 
-# NPCStudio 0.6.3 — текущая сборка
+[**Get the beta**](https://github.com/selenter-c/NPCStudio-GamePlugin/releases/tag/v0.8.7-beta) · [Game data and UI](https://github.com/selenter-c/NPCStudio-GamePlugin) · [Native source](https://github.com/selenter-c/NPCStudio-NativePlugin)
 
-Рендер 0.6.1 подтверждён пользователем, но выявлена пропажа головы после повторного запуска. 0.6.1-user-tested означает проверенный рендер, не save/load.
-0.6.3: части головы сохраняются по plugin/localForm и возвращаются через ChangeHeadPart перед Update3DModel в очереди восстановления. При смене расы старый снимок частей удаляется. Нужен тест новой игры, save/exit/load, орк и зверорасы. Исправление скомпилировано, визуально в Skyrim агентом не проверено.
-Phantasm: штатные hints pose=captured и motion=true установлены при OpenActor. Контракт подтверждён Ghidra function 180026BF0: pose сравнивается с captured, motion проходит boolean parser и SetMotion. При недоступном behavior graph провайдер может сохранять неподвижную позу; нужен игровой тест.
-Камера: native pitch, мышь в двух осях, колесо и встроенные кнопки yaw/pitch/zoom; освещение внутри NPC viewport. Слайдеры скрыты, их значения служат внутренним состоянием. Компактная ширина NPC viewport. Обычный текст не выделяется.
-Снаряжение: вкладки инвентарь/каталог, постоянная панель предмета, hover180ms + focus вместо 3D-кнопок, обновление во время drag, защита повторного выбора той же формы. Статус свежего/использованного слота отображается цветным кружком в custom combo.
-Проверки: build.bat, CTest2, Mutagen400slots, Chrome mock UI включая pointermove с удерживаемой кнопкой и pitch до pointerup. ZIP включает Phantasm/SWF, один установщик. Предыдущие схемы и миграции не добавлены.
+## Requirements
 
-## Обновление 0.6.3
+- Windows, Git, and Visual Studio Build Tools with the C++ desktop workload.
+- CMake 3.24+, Ninja, and vcpkg. Set `VCPKG_ROOT` if vcpkg is outside `C:\vcpkg`.
+- .NET SDK 10 for the Mutagen ESP tool and Python 3 for packaging.
+- A local copy of `Skyrim.esm`. Set `SKYRIM_FOLDER` to your Skyrim installation root if the game is outside the detected paths.
+- For the browser smoke test, Node.js, Playwright, and Google Chrome.
 
-Установка одним архивом `NPCStudio-Build/dist/NPCStudio-0.6.3-fomod.zip`: проверенный Phantasm, его SWF и лицензии включены в локальный комплект. Отдельный мод NPCStudio-Phantasm отключить, чтобы он не перекрывал файлы. Полный SeverActions не требуется. Phantasm остаётся отдельной DLL внутри одного установленного мода; это внешний компонент, не собственная разработка NPCStudio. Чужие бинарники не публикуются в Git.
+Player runtime requirements and installation are in the [GamePlugin README](https://github.com/selenter-c/NPCStudio-GamePlugin#requirements).
 
-Исправлено: строчный ID клиента Phantasm, поиск предметов через LookupForm + As (также аудит инвентаря), синхронизация цвета тела со слоем кожи головы после смены расы. Сборка и автоматические тесты не заменяют проверку в Skyrim; начать новую игру и проверить NPC/предметы/орка/возврат одежды.
+## Build
 
-Сборка: `NPCStudio-Build/build.bat`, инкрементально. Требуются Skyrim 1.6.1170, SKSE, Address Library и Magelight UI. Открытие Shift+8 (верхний ряд). Языки ru/en, четыре палитры, 200 женских и 200 мужских слотов; только текущая схема сохранения, без миграций. Пользовательские Equipment/user-*.json, categories.json и settings.json сохранить перед заменой установленной версии.
+Check out the three repositories side by side.
 
-Проверки: CTest state-codec/preview-contract, Mutagen 400 NPC + 400 persistent ACHR, Chrome headless с имитацией игрового API, ZIP и хеш Phantasm. Последняя стабильная пользовательская точка — checkpoint-0.4.0-user-tested; 0.6.3 помечается только build-tested до игрового теста. Редактор головы/RaceMenu и SkyrimNet ещё не подключены.
+```text
+NPCStudio/
+  NPCStudio-Build/
+  NPCStudio-GamePlugin/
+  NPCStudio-NativePlugin/
+```
 
-Разбор рендера: NPCStudio-NativePlugin/docs/RENDERING_060.md, исправления: NPCStudio-NativePlugin/docs/RENDERING_061.md. Автоматизация не запускает MO2/Skyrim. Локальный установщик собирается из предоставленного пользователем SeverAction/97 Phantasm/00 Core; бинарник проверяется по точному SHA256, не добавляется в Git.
+Run these commands from `NPCStudio-Build` in PowerShell.
+
+```powershell
+.\build.bat
+.\build-clean.bat
+```
+
+The incremental build regenerates and validates the ESP, compiles the native DLL, runs CTest, and writes `dist/NPCStudio-0.8.7-beta-fomod.zip`. Use the clean build when the native toolchain or its dependencies change.
+
+To repackage an existing, verified DLL, run `.pack-mo2.ps1`. For a local-only archive that includes Phantasm, place the renderer from [SeverActions 4.7.0](https://github.com/Severause/SeverActions/releases/tag/v4.7.0) in the sibling path `SeverAction/97 Phantasm/00 Core` and run `.pack-mo2.ps1 -IncludePhantasm`. The packer verifies the exact renderer binary before producing a separate local archive. The release archive expects the renderer to be installed from upstream.
+
+## Test the UI
+
+```powershell
+npm --prefix tools/ui-tests ci
+node tools/ui-tests/smoke.cjs
+```
+
+The headless test exercises the editor against a mocked game bridge. In-game tests use Skyrim and MO2.
+
+## Credits
+
+The build uses [Mutagen](https://github.com/Mutagen-Modding/Mutagen) for plugin records and [CommonLibSSE-NG](https://github.com/alandtse/CommonLibVR) for the native plugin. [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin), [IntelEngine](https://github.com/galanx/IntelEngine-GamePlugin), and [SeverActions](https://github.com/Severause/SeverActions) informed the project structure and integration. See the [GamePlugin credits](https://github.com/selenter-c/NPCStudio-GamePlugin#credits) for the full list.
+
+Developed with **OpenAI Codex**, which helped solve implementation, build, packaging, and validation problems.

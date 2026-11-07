@@ -8,7 +8,7 @@
       2. Compiles C++ plugin via build-native.ps1
       3. Packs into FOMOD .zip via pack-mo2.ps1
     
-    Result: dist/NPCStudio-X.Y.Z-fomod.zip - ready for MO2 install.
+    Result: dist/NPCStudio-X.Y.Z-beta-fomod.zip.
 
 .PARAMETER Config
     Build configuration: Release (default) or Debug.
@@ -20,8 +20,8 @@
     Force clean rebuild of C++ plugin (delete build/ and recompile all).
     Without this flag, only changed files are recompiled (incremental build).
 
-.PARAMETER SkipValidation
-    Skip ZIP validation (not recommended).
+.PARAMETER IncludePhantasm
+    Include the locally supplied Phantasm renderer in a separate local-only package.
 
 .EXAMPLE
     .\full-build.ps1                    # Incremental build + pack (fast)
@@ -34,7 +34,7 @@ param(
     [string]$Config = "Release",
     [string]$VcpkgRoot = "",
     [switch]$Clean,
-    [switch]$SkipValidation
+    [switch]$IncludePhantasm
 )
 
 Set-StrictMode -Version Latest
@@ -99,11 +99,7 @@ Write-Host "--------------------------------------------" -ForegroundColor Yello
 Write-Host "  STEP 3/3: Packing for Mod Organizer 2" -ForegroundColor Yellow
 Write-Host "--------------------------------------------" -ForegroundColor Yellow
 
-if ($SkipValidation) {
-    & "$PSScriptRoot\pack-mo2.ps1" -SkipValidation
-} else {
-    & "$PSScriptRoot\pack-mo2.ps1"
-}
+& "$PSScriptRoot\pack-mo2.ps1" -IncludePhantasm:$IncludePhantasm
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""

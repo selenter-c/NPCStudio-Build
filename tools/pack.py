@@ -1,4 +1,4 @@
-"""Упаковка только проверенного комплекта. Legacy-файлы не включаются."""
+"""Build the release FOMOD or a local package with the pinned renderer."""
 import argparse
 import hashlib
 import json
@@ -13,6 +13,7 @@ parser.add_argument('--root', type=Path, required=True)
 parser.add_argument('--dll', type=Path, required=True)
 parser.add_argument('--source-hash', required=True)
 parser.add_argument('--version', default='')
+parser.add_argument('--include-phantasm', action='store_true')
 args = parser.parse_args()
 root = args.root.resolve()
 game = root / 'NPCStudio-GamePlugin'
@@ -30,7 +31,7 @@ files = {}
 for folder in ['Magelight', 'SKSE']:
     for path in (data / folder).rglob('*'):
         if path.is_file() and path.name not in ['meta.ini', 'Thumbs.db', 'desktop.ini']:
-            files[path.relative_to(data).as_posix()] = path
+            files['Core/' + path.relative_to(data).as_posix()] = path
 preset_dir = data / 'SKSE/Plugins/NPCStudio/Equipment'
 expected_presets = {'guard-' + name for name in ['whiterun', 'solitude', 'markarth', 'riften', 'winterhold', 'dawnstar', 'morthal', 'falkreath', 'windhelm']}
 expected_presets.update(['bandit-melee', 'bandit-archer', 'citizen-farm', 'citizen-fine', 'blacksmith', 'miner', 'mage'])
@@ -47,35 +48,58 @@ for path in preset_dir.glob('*.json'):
             raise ValueError('Invalid equipment item: ' + str(path))
         seen.add(address)
 # Локальная сборка из предоставленного пользователем Phantasm, с проверкой точной версии.
-from phantasm import inspect
-provider = root / 'SeverAction/97 Phantasm/00 Core'
-inspect(provider)
-for path in provider.rglob('*'):
-    if path.is_file():
-        name = path.relative_to(provider).as_posix()
-        if name in files: raise ValueError('Provider payload collision: ' + name)
-        files[name] = path
-files['NPCStudio.esp'] = data / 'NPCStudio.esp'
-files['NPCStudio_NND_DISTR.ini'] = data / 'NPCStudio_NND_DISTR.ini'
+if args.include_phantasm:
+    from phantasm import inspect
+    provider = root / 'SeverAction/97 Phantasm/00 Core'
+    inspect(provider)
+    for path in provider.rglob('*'):
+        if path.is_file():
+            name = 'Core/' + path.relative_to(provider).as_posix()
+            if name in files: raise ValueError('Provider payload collision: ' + name)
+            files[name] = path
+files['Core/NPCStudio.esp'] = data / 'NPCStudio.esp'
+files['Optional/NND/NPCStudio_NND_DISTR.ini'] = data / 'NPCStudio_NND_DISTR.ini'
 for path in (game / 'fomod').rglob('*'):
     if path.is_file(): files[path.relative_to(game).as_posix()] = path
-files['SKSE/Plugins/NPCStudio.dll'] = args.dll
-files['SKSE/Plugins/NPCStudio.build.json'] = stamp_path
-required = ['NPCStudio.esp', 'NPCStudio_NND_DISTR.ini', 'SKSE/Plugins/NPCStudio.dll', 'SKSE/Plugins/NPCStudio/slots.json',
-    'Magelight/NPCStudio/views/studio/index.html', 'Magelight/NPCStudio/views/studio/script.js',
-    'Magelight/NPCStudio/views/studio/style.css', 'Magelight/NPCStudio/views/studio/i18n.js', 'fomod/info.xml', 'fomod/ModuleConfig.xml']
+files['Core/SKSE/Plugins/NPCStudio.dll'] = args.dll
+native = root / 'NPCStudio-NativePlugin'
+commonlib = args.dll.parent / '_deps/commonlibsse-src'
+notices = {
+    'NPCStudio-MIT.txt': native / 'LICENSE',
+    'CommonLibSSE-NG-GPL.txt': commonlib / 'COPYING.txt',
+    'CommonLibSSE-NG-exceptions.txt': commonlib / 'EXCEPTIONS.md',
+    'CommonLibSSE-NG-legacy-MIT.txt': commonlib / 'licenses/LICENSE-MIT.txt',
+    'hde64.txt': commonlib / 'licenses/LICENSE-hde64.txt',
+    'Magelight-SDK.txt': native / 'include/Magelight-LICENSE.txt',
+    'NND-SDK.txt': native / 'include/NND-LICENSE.txt',
+}
+for dependency in ('fmt', 'spdlog', 'nlohmann-json', 'rapidcsv', 'directxtk', 'directxmath'):
+    notices[dependency + '.txt'] = args.dll.parent / 'vcpkg_installed/x64-windows-static/share' / dependency / 'copyright'
+for name, path in notices.items():
+    if not path.is_file(): raise ValueError('Missing dependency notice: ' + str(path))
+    files['Core/SKSE/Plugins/NPCStudio/Licenses/' + name] = path
+required = ['Core/NPCStudio.esp', 'Optional/NND/NPCStudio_NND_DISTR.ini', 'Core/SKSE/Plugins/NPCStudio.dll',
+    'Core/SKSE/Plugins/NPCStudio/slots.json', 'fomod/info.xml', 'fomod/ModuleConfig.xml']
+required += ['Core/Magelight/NPCStudio/views/studio/' + name for name in ('index.html', 'script.js', 'style.css', 'i18n.js', 'appearance.js', 'presets.js')]
 for name in required:
     if name not in files or not files[name].is_file(): raise ValueError('Missing payload: ' + name)
-for item in Xml.parse(game / 'fomod/ModuleConfig.xml').find('requiredInstallFiles'):
-    source = item.attrib['source']
-    if item.tag == 'file' and source not in files: raise ValueError('FOMOD file missing: ' + source)
-    if item.tag == 'folder' and not any(n.startswith(source + '/') for n in files): raise ValueError('FOMOD folder missing: ' + source)
+config = Xml.parse(game / 'fomod/ModuleConfig.xml')
+for item in config.iter():
+    if item.tag in ('file', 'image', 'moduleImage'):
+        source = item.get('source') or item.get('path')
+        if source not in files: raise ValueError('FOMOD file missing: ' + str(source))
+    if item.tag == 'folder':
+        source = item.attrib['source']
+        if not any(n.startswith(source + '/') for n in files): raise ValueError('FOMOD folder missing: ' + source)
 for name in files:
-    if name.startswith(('PrismaUI/', 'Scripts/')) or '\\' in name or name.lower().endswith('.psc'):
+    if name.startswith(('Core/PrismaUI/', 'Core/Scripts/')) or '\\' in name or name.lower().endswith('.psc'):
         raise ValueError('Legacy payload: ' + name)
+    if not args.include_phantasm and name.lower().startswith(('core/interface/', 'core/skse/plugins/phantasm', 'core/skse/plugins/magelight')):
+        raise ValueError('Third-party runtime in release payload: ' + name)
 dist = root / 'NPCStudio-Build/dist'
 dist.mkdir(exist_ok=True)
-output = dist / f'NPCStudio-{version}-fomod.zip'
+edition = 'local' if args.include_phantasm else 'beta'
+output = dist / f'NPCStudio-{version}-{edition}-fomod.zip'
 with tempfile.NamedTemporaryFile(dir=dist, suffix='.zip', delete=False) as temporary:
     temp = Path(temporary.name)
 try:
