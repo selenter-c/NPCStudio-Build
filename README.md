@@ -2,7 +2,7 @@
 
 Build and package [NPC Studio](https://github.com/selenter-c/NPCStudio-GamePlugin) for Skyrim Special Edition 1.6.1170. NPC Studio creates blank, persistent NPCs for editing in game and for AI-driven playthroughs with [SkyrimNet](https://github.com/MinLL/SkyrimNet-GamePlugin).
 
-[**Get the beta**](https://github.com/selenter-c/NPCStudio-GamePlugin/releases/tag/v0.8.7-beta) · [Game data and UI](https://github.com/selenter-c/NPCStudio-GamePlugin) · [Native source](https://github.com/selenter-c/NPCStudio-NativePlugin)
+[**Get the beta**](https://github.com/selenter-c/NPCStudio-GamePlugin/releases) · [Game data and UI](https://github.com/selenter-c/NPCStudio-GamePlugin) · [Native source](https://github.com/selenter-c/NPCStudio-NativePlugin)
 
 ## Requirements
 
@@ -32,7 +32,7 @@ Run these commands from `NPCStudio-Build` in PowerShell.
 .\build-clean.bat
 ```
 
-The incremental build regenerates and validates the ESP, compiles the native DLL, runs CTest, and writes `dist/NPCStudio-0.8.7-beta-fomod.zip`. Use the clean build when the native toolchain or its dependencies change.
+The incremental build regenerates and validates the ESP, compiles the native DLL, runs CTest, and writes `dist/NPCStudio-0.8.7-beta.2-fomod.zip`. Use the clean build when the native toolchain or its dependencies change.
 
 To repackage an existing, verified DLL, run `.pack-mo2.ps1`. For a local-only archive that includes Phantasm, place the renderer from [SeverActions 4.7.0](https://github.com/Severause/SeverActions/releases/tag/v4.7.0) in the sibling path `SeverAction/97 Phantasm/00 Core` and run `.pack-mo2.ps1 -IncludePhantasm`. The packer verifies the exact renderer binary before producing a separate local archive. The release archive expects the renderer to be installed from upstream.
 

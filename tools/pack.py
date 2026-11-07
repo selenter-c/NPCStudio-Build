@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import xml.etree.ElementTree as Xml
 import zipfile
@@ -18,8 +19,10 @@ args = parser.parse_args()
 root = args.root.resolve()
 game = root / 'NPCStudio-GamePlugin'
 data = game / 'Data'
-version = args.version or Xml.parse(game / 'fomod/info.xml').findtext('Version')
-if not version or not all(part.isdecimal() for part in version.split('.')) or len(version.split('.')) != 3:
+metadata = Xml.parse(game / 'fomod/info.xml').find('Version')
+package_version = metadata.text or ''
+version = args.version or metadata.get('MachineVersion', package_version)
+if not re.fullmatch(r'\d+\.\d+\.\d+', version) or not re.fullmatch(re.escape(version) + r'(?:-beta(?:\.\d+)?)?', package_version):
     raise ValueError('Invalid package version')
 stamp_path = args.dll.with_name('NPCStudio.build.json')
 stamp = json.loads(stamp_path.read_text(encoding='utf-8-sig'))
@@ -98,8 +101,10 @@ for name in files:
         raise ValueError('Third-party runtime in release payload: ' + name)
 dist = root / 'NPCStudio-Build/dist'
 dist.mkdir(exist_ok=True)
-edition = 'local' if args.include_phantasm else 'beta'
-output = dist / f'NPCStudio-{version}-{edition}-fomod.zip'
+package_label = package_version if '-' in package_version else f'{version}-beta'
+if args.include_phantasm:
+    package_label += '-local'
+output = dist / f'NPCStudio-{package_label}-fomod.zip'
 with tempfile.NamedTemporaryFile(dir=dist, suffix='.zip', delete=False) as temporary:
     temp = Path(temporary.name)
 try:
