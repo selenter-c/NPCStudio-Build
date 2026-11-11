@@ -15,7 +15,7 @@ const fs = require('node:fs')
     await page.addInitScript(({ presets }) => {
       const female = id => id < 200
       const number = id => id % 200 + 1
-      const state = { version: '0.8.10', runtime: '1.7.104.0', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 9, modifiers: 1, language: 'ru', theme: 'amethyst' }, races: [{ id: 'NordRace', name: 'Норд' }, { id: 'WoodElfRace', name: 'Босмер' }, { id: 'KhajiitRace', name: 'Каджит' }, { id: 'OrcRace', name: 'Орк' }], library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
+      const state = { version: '0.8.11', runtime: '1.7.104.0', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 9, modifiers: 1, language: 'ru', theme: 'amethyst' }, races: [{ id: 'NordRace', name: 'Норд' }, { id: 'WoodElfRace', name: 'Босмер' }, { id: 'KhajiitRace', name: 'Каджит' }, { id: 'OrcRace', name: 'Орк' }], library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
       const used = new Set()
       const inventory = new Map()
       const savedPortraits = new Map()
@@ -615,6 +615,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.10: appearance tabs, hover arrows, facial cards, skin palette, height, inventory, outfits and previews at 720p/1080p passed')
+    console.log('UI 0.8.11: appearance tabs, hover arrows, facial cards, skin palette, height, inventory, outfits and previews at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })

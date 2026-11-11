@@ -1,4 +1,4 @@
-"""Build the FOMOD with the pinned renderer."""
+"""Build the FOMOD without external mod runtimes."""
 import argparse
 import hashlib
 import json
@@ -14,7 +14,6 @@ parser.add_argument('--root', type=Path, required=True)
 parser.add_argument('--dll', type=Path, required=True)
 parser.add_argument('--source-hash', required=True)
 parser.add_argument('--version', default='')
-parser.add_argument('--public', action='store_true')
 args = parser.parse_args()
 root = args.root.resolve()
 game = root / 'NPCStudio-GamePlugin'
@@ -50,28 +49,6 @@ for path in preset_dir.glob('*.json'):
         if address in seen or item['plugin'] != 'Skyrim.esm' or not 0 < item['form'] <= 0xFFFFFF or not 1 <= item['count'] <= 1000:
             raise ValueError('Invalid equipment item: ' + str(path))
         seen.add(address)
-# Сохраняем исходные пути, чтобы MO2 предоставлял игре только одну копию рендера.
-provider = root / 'research/Phantasm-runtime'
-rendererFiles = []
-if not args.public:
-    rendererHashes = {
-        'SKSE/Plugins/Phantasm.dll': '6eb9448ec735a49b79a75549b591fb9edbe73bedf405458c38ab0df1b6aed387',
-        'Interface/phantasm.swf': 'e3b3331c52c71ef09e462190ba87c377fce188076b8e19a7247a37493f1fefe4',
-    }
-    for name, expected in rendererHashes.items():
-        path = provider / name
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-            raise ValueError('Expected standalone Phantasm 1.0.0 file: ' + str(path))
-    rendererFiles = [*rendererHashes, 'SKSE/Plugins/Phantasm.ini', 'SKSE/Plugins/Phantasm/VERSION.txt']
-    rendererFiles.extend('SKSE/Plugins/Phantasm/Licenses/' + name + '.txt' for name in (
-        'Phantasm-MIT', 'CBPCSSE-MIT', 'CommonLibSSE-NG-MIT', 'DirectXMath-MIT', 'DirectXTex-MIT',
-        'DirectXTK-MIT', 'fmt-MIT', 'nlohmann-json-MIT', 'openvr-BSD3', 'rapidcsv-BSD3', 'spdlog-MIT', 'xbyak-BSD3',
-    ))
-for name in rendererFiles:
-    entry = 'Core/' + name
-    if entry in files:
-        raise ValueError('Provider payload collision: ' + entry)
-    files[entry] = provider / name
 files['Core/NPCStudio.esp'] = data / 'NPCStudio.esp'
 files['Optional/NND/NPCStudio_NND_DISTR.ini'] = data / 'NPCStudio_NND_DISTR.ini'
 for path in (game / 'fomod').rglob('*'):
@@ -97,7 +74,6 @@ for name, path in notices.items():
 required = ['Core/NPCStudio.esp', 'Optional/NND/NPCStudio_NND_DISTR.ini', 'Core/SKSE/Plugins/NPCStudio.dll',
     'Core/SKSE/Plugins/NPCStudio/slots.json', 'fomod/info.xml', 'fomod/ModuleConfig.xml']
 required += ['Core/Magelight/NPCStudio/views/studio/' + name for name in ('index.html', 'script.js', 'style.css', 'i18n.js', 'appearance.js', 'presets.js')]
-required += ['Core/' + name for name in rendererFiles]
 for name in required:
     if name not in files or not files[name].is_file(): raise ValueError('Missing payload: ' + name)
 config = Xml.parse(game / 'fomod/ModuleConfig.xml')
@@ -113,12 +89,11 @@ for name in files:
         raise ValueError('Legacy payload: ' + name)
     if name.lower().startswith('core/skse/plugins/magelight'):
         raise ValueError('Unexpected Magelight runtime in payload: ' + name)
-    if args.public and name.lower().startswith(('core/interface/', 'core/skse/plugins/phantasm')):
-        raise ValueError('Third-party renderer in public payload: ' + name)
+    if name.lower().startswith(('core/interface/', 'core/skse/plugins/phantasm')):
+        raise ValueError('Third-party renderer in payload: ' + name)
 dist = root / 'NPCStudio-Build/dist'
 dist.mkdir(exist_ok=True)
-suffix = 'without-renderer-fomod' if args.public else 'fomod'
-output = dist / f'NPCStudio-{package_version}-{suffix}.zip'
+output = dist / f'NPCStudio-{package_version}-fomod.zip'
 with tempfile.NamedTemporaryFile(dir=dist, suffix='.zip', delete=False) as temporary:
     temp = Path(temporary.name)
 try:
