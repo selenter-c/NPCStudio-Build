@@ -15,7 +15,7 @@ const fs = require('node:fs')
     await page.addInitScript(({ presets }) => {
       const female = id => id < 200
       const number = id => id % 200 + 1
-      const state = { version: '0.8.7', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 9, modifiers: 1, language: 'ru', theme: 'amethyst' }, races: [{ id: 'NordRace', name: 'Норд' }, { id: 'WoodElfRace', name: 'Босмер' }, { id: 'KhajiitRace', name: 'Каджит' }, { id: 'OrcRace', name: 'Орк' }], library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
+      const state = { version: '0.8.9', runtime: '1.7.104.0', capacity: 200, ready: true, worldLoaded: true, error: '', femaleUsed: 0, maleUsed: 0, slots: [], availableSlots: [], settings: { key: 9, modifiers: 1, language: 'ru', theme: 'amethyst' }, races: [{ id: 'NordRace', name: 'Норд' }, { id: 'WoodElfRace', name: 'Босмер' }, { id: 'KhajiitRace', name: 'Каджит' }, { id: 'OrcRace', name: 'Орк' }], library: { presets, categories: [...new Set([...presets.map(preset => preset.category), 'Мои наборы'])].sort() } }
       const used = new Set()
       const inventory = new Map()
       const savedPortraits = new Map()
@@ -149,7 +149,7 @@ const fs = require('node:fs')
             context.fillStyle = '#c4a0e7'; context.font = '18px sans-serif'; context.fillText('MOCK PHANTASM',60,180)
             const kind = payload.action === 'itemPreview' ? 'item' : payload.action === 'portrait' ? 'portrait' : 'actor'
             const identity = kind === 'item' ? 'item-' + payload.item.form : actor.identity
-            const update = { identity, kind, pending: true, backend: 'Phantasm 0.3.0' }
+            const update = { identity, kind, pending: true, backend: 'Phantasm' }
             setTimeout(() => window.studioResponse({ requestId: payload.requestId, ok: true, state: { partial: true, [payload.action]: update } }), 5)
             if (payload.editorCapture && window.testPortraitFailure) {
               setTimeout(() => window.studioPreview({ ...update, pending: false, error: 'Cannot replace portrait' }), 20)
@@ -200,6 +200,7 @@ const fs = require('node:fs')
     await page.goto('file:///' + path.join(root, 'NPCStudio-GamePlugin/Data/Magelight/NPCStudio/views/studio/index.html').replaceAll('\\', '/'))
     await page.waitForFunction(() => document.querySelector('#hotkeyHint').textContent === 'Shift + 8')
     assert.equal(await page.locator('#hotkeyHint').textContent(), 'Shift + 8')
+    assert.equal(await page.locator('#runtimeLabel').textContent(), 'MAGELIGHT UI · SKYRIM 1.7.104.0')
     assert.equal(await page.locator('#slotSelect option').count(), 201)
     assert.equal((await page.locator('#slotSelect').textContent()).includes('неизвестна'), false)
     assert.equal(await page.locator('#slotSelect option[value="0"]').textContent(), '● Слот 1 · новый')
@@ -215,6 +216,9 @@ const fs = require('node:fs')
     assert.equal(await page.evaluate(() => window.testCommands.find(command => command.action === 'create').race), 'OrcRace')
     await page.waitForFunction(() => !document.querySelector('#previewImage').hidden)
     await page.waitForFunction(() => document.querySelectorAll('.avatar img').length === 1)
+    await Combo('previewMotion', 'Анимация')
+    await page.waitForFunction(() => window.testCommands.some(command => command.action === 'preview' && command.motion))
+    await Combo('previewMotion', 'Статичная поза')
     await page.getByRole('button', { name: 'Переснять портрет', exact: true }).click()
     assert.equal(await page.locator('.portrait-editor #previewViewport').count(), 1)
     assert.equal(await page.locator('.portrait-circle').isVisible(), true)
@@ -284,6 +288,8 @@ const fs = require('node:fs')
     assert.equal(await page.locator('#equipmentInventory .equipment-item').first().locator('button').first().textContent(), 'Снять')
     await page.locator('#equipmentInventory .equipment-item').first().click()
     await page.waitForFunction(() => !document.querySelector('#itemPreviewImage').hidden)
+    await Combo('itemPreviewWorn', 'На женщине')
+    await page.waitForFunction(() => window.testCommands.some(command => command.action === 'itemPreview' && command.worn === 'female'))
     assert.equal(await page.locator('#itemPreviewYaw').inputValue(), '180')
     await page.locator('#itemPreviewViewport').dispatchEvent('pointerdown', { button: 2, clientX: 100, clientY: 100, pointerId: 1 })
     await page.locator('#itemPreviewViewport').dispatchEvent('pointermove', { clientX: 130, clientY: 120, pointerId: 1 })
@@ -606,6 +612,6 @@ const fs = require('node:fs')
     await page.keyboard.press('Shift+Digit8')
     assert.equal(await page.evaluate(() => window.testCommands.filter(C => C.action === 'close').length), BeforeClose + 1)
     assert.deepEqual(errors, [])
-    console.log('UI 0.8.7: appearance tabs, hover arrows, facial cards, skin palette, height, inventory, outfits and previews at 720p/1080p passed')
+    console.log('UI 0.8.9: appearance tabs, hover arrows, facial cards, skin palette, height, inventory, outfits and previews at 720p/1080p passed')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })

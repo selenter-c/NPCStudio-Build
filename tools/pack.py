@@ -8,7 +8,6 @@ import re
 import tempfile
 import xml.etree.ElementTree as Xml
 import zipfile
-from phantasm import inspect
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=Path, required=True)
@@ -52,14 +51,22 @@ for path in preset_dir.glob('*.json'):
             raise ValueError('Invalid equipment item: ' + str(path))
         seen.add(address)
 # Сохраняем исходные пути, чтобы MO2 предоставлял игре только одну копию рендера.
-provider = root / 'SeverAction/97 Phantasm/00 Core'
+provider = root / 'research/Phantasm-runtime'
 rendererFiles = []
 if not args.public:
-    inspect(provider)
-    rendererFiles = ['Interface/phantasm.swf', 'SKSE/Plugins/Phantasm.dll',
-        'SKSE/Plugins/Phantasm/VERSION.txt']
-    rendererFiles.extend(path.relative_to(provider).as_posix()
-        for path in (provider / 'SKSE/Plugins/Phantasm/Licenses').glob('*.txt') if path.is_file())
+    rendererHashes = {
+        'SKSE/Plugins/Phantasm.dll': '6eb9448ec735a49b79a75549b591fb9edbe73bedf405458c38ab0df1b6aed387',
+        'Interface/phantasm.swf': 'e3b3331c52c71ef09e462190ba87c377fce188076b8e19a7247a37493f1fefe4',
+    }
+    for name, expected in rendererHashes.items():
+        path = provider / name
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise ValueError('Expected standalone Phantasm 1.0.0 file: ' + str(path))
+    rendererFiles = [*rendererHashes, 'SKSE/Plugins/Phantasm.ini', 'SKSE/Plugins/Phantasm/VERSION.txt']
+    rendererFiles.extend('SKSE/Plugins/Phantasm/Licenses/' + name + '.txt' for name in (
+        'Phantasm-MIT', 'CBPCSSE-MIT', 'CommonLibSSE-NG-MIT', 'DirectXMath-MIT', 'DirectXTex-MIT',
+        'DirectXTK-MIT', 'fmt-MIT', 'nlohmann-json-MIT', 'openvr-BSD3', 'rapidcsv-BSD3', 'spdlog-MIT', 'xbyak-BSD3',
+    ))
 for name in rendererFiles:
     entry = 'Core/' + name
     if entry in files:
@@ -80,6 +87,7 @@ notices = {
     'hde64.txt': commonlib / 'licenses/LICENSE-hde64.txt',
     'Magelight-SDK.txt': native / 'include/Magelight-LICENSE.txt',
     'NND-SDK.txt': native / 'include/NND-LICENSE.txt',
+    'Phantasm-SDK.txt': native / 'include/Phantasm-LICENSE.txt',
 }
 for dependency in ('fmt', 'spdlog', 'nlohmann-json', 'rapidcsv', 'directxtk', 'directxmath'):
     notices[dependency + '.txt'] = args.dll.parent / 'vcpkg_installed/x64-windows-static/share' / dependency / 'copyright'
@@ -109,9 +117,8 @@ for name in files:
         raise ValueError('Third-party renderer in public payload: ' + name)
 dist = root / 'NPCStudio-Build/dist'
 dist.mkdir(exist_ok=True)
-package_label = package_version if '-' in package_version else f'{version}-beta'
-suffix = 'fomod' if args.public else 'local-fomod'
-output = dist / f'NPCStudio-{package_label}-{suffix}.zip'
+suffix = 'without-renderer-fomod' if args.public else 'fomod'
+output = dist / f'NPCStudio-{package_version}-{suffix}.zip'
 with tempfile.NamedTemporaryFile(dir=dist, suffix='.zip', delete=False) as temporary:
     temp = Path(temporary.name)
 try:

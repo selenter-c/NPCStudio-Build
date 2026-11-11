@@ -8,7 +8,7 @@
       2. Compiles C++ plugin via build-native.ps1
       3. Packs into FOMOD .zip via pack-mo2.ps1
     
-    Result: dist/NPCStudio-X.Y.Z-beta-local-fomod.zip.
+    Result: dist/NPCStudio-X.Y.Z-fomod.zip.
 
 .PARAMETER Config
     Build configuration: Release (default) or Debug.
